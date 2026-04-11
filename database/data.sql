@@ -106,9 +106,9 @@ INSERT INTO TuyenXe (ten_tuyen, diem_di, diem_den, khoang_cach, thoi_gian_du_kie
 
 -- Dữ liệu mẫu bảng ChuyenXe
 INSERT INTO ChuyenXe (tuyen_xe_id, xe_id, ngay_di, gio_di, gia_ve, trang_thai) VALUES
-(1, 1, '2026-04-10', '22:00:00', 250000.00, 'CHUA_KHOI_HANH'),
-(1, 3, '2026-04-10', '23:30:00', 350000.00, 'CHUA_KHOI_HANH'),
-(2, 2, '2026-04-11', '20:00:00', 300000.00, 'CHUA_KHOI_HANH');
+(1, 1, '2026-04-20', '22:00:00', 250000.00, 'CHUA_KHOI_HANH'),
+(1, 3, '2026-04-20', '23:30:00', 350000.00, 'CHUA_KHOI_HANH'),
+(2, 2, '2026-04-21', '20:00:00', 300000.00, 'CHUA_KHOI_HANH');
 
 -- Dữ liệu mẫu bảng VeXe
 INSERT INTO VeXe (ma_ve, khach_hang_id, chuyen_xe_id, so_luong_ghe, tong_tien, trang_thai, ghi_chu) VALUES
@@ -119,7 +119,7 @@ INSERT INTO VeXe (ma_ve, khach_hang_id, chuyen_xe_id, so_luong_ghe, tong_tien, t
 -- Dữ liệu mẫu bảng ChiTietVe
 INSERT INTO ChiTietVe (ve_xe_id, so_ghe) VALUES
 (1, 'A01'), (1, 'A02'), 
-(2, 'L01'),            
+(2, 'A01'),            
 (3, 'B01'), (3, 'B02'), (3, 'B03'); 
 
 -- Dữ liệu mẫu bảng ThanhToan

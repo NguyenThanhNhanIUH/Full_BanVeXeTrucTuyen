@@ -1,0 +1,18 @@
+# Maven
+backend-springboot/target/
+**/target/
+
+# IDE
+.idea/
+*.iml
+.vscode/
+*.swp
+*.swo
+
+# OS
+Thumbs.db
+Desktop.ini
+
+# Local DB / env (optional local files)
+backend-springboot/data/*.mv.db
+backend-springboot/data/*.trace.db

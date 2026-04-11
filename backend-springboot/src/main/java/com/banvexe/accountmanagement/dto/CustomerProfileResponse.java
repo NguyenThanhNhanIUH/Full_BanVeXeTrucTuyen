@@ -1,6 +1,6 @@
 package com.banvexe.accountmanagement.dto;
 
-public record UserProfileResponse(
+public record CustomerProfileResponse(
     Integer id,
     String email,
     String fullName,

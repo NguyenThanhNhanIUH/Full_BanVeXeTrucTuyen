@@ -1,0 +1,545 @@
+{
+  "info": {
+    "name": "BanVeXe — Quản lý tài khoản (đầy đủ)",
+    "description": "API tài khoản + tra cứu/đặt vé (SRS).\n\n**Đăng nhập:** *POST Đăng nhập (khách)* → `tokenKhach`; *(admin)* → `tokenAdmin` (dùng cho `/api/admin/**`, `/api/manager/**` và `/api/staff/**` vì `QUAN_TRI` được phép).\n\n**Phản hồi đặt vé:** các endpoint `/api/catalog/**`, `/api/me/booking/**`, `/api/staff/**`, `/api/manager/**` trả JSON dạng `{ code, message, data }`.\n\n**cURL:** trong mô tả các request login.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:8080" },
+    { "key": "tokenKhach", "value": "" },
+    { "key": "tokenAdmin", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "Health",
+      "item": [
+        {
+          "name": "GET Kiểm tra backend (accounts)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/accounts/health"
+          }
+        },
+        {
+          "name": "GET Health admin (JWT QUAN_TRI)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{tokenAdmin}}" }],
+            "url": "{{baseUrl}}/api/admin/health"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Catalog — tra cứu (công khai)",
+      "item": [
+        {
+          "name": "GET Danh sách tuyến",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/catalog/routes?diemDi=&diemDen=",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "catalog", "routes"],
+              "query": [
+                { "key": "diemDi", "value": "" },
+                { "key": "diemDen", "value": "" }
+              ]
+            },
+            "description": "Không cần JWT. Query tùy chọn lọc điểm đi/đến."
+          }
+        },
+        {
+          "name": "GET Danh sách chuyến",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/catalog/trips?diemDi=Hồ Chí Minh&diemDen=&ngayDi=&soLuongVeToiThieu=1",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "catalog", "trips"],
+              "query": [
+                { "key": "diemDi", "value": "Hồ Chí Minh" },
+                { "key": "diemDen", "value": "" },
+                { "key": "ngayDi", "value": "", "description": "YYYY-MM-DD, để trống = mọi ngày từ hôm nay" },
+                { "key": "soLuongVeToiThieu", "value": "1" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "GET Chi tiết chuyến",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/catalog/trips/1"
+          }
+        },
+        {
+          "name": "GET Sơ đồ ghế chuyến",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/catalog/trips/1/seats"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Auth — công khai",
+      "item": [
+        {
+          "name": "POST Đăng ký",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"user.moi@example.com\",\n  \"password\": \"123456\",\n  \"fullName\": \"Người Mới\",\n  \"phone\": \"0912345678\"\n}"
+            },
+            "url": "{{baseUrl}}/api/auth/register",
+            "description": "phone tùy chọn. Sau đó xem OTP trên console server hoặc email."
+          }
+        },
+        {
+          "name": "POST Gửi lại OTP",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"user.moi@example.com\"\n}"
+            },
+            "url": "{{baseUrl}}/api/auth/resend-otp"
+          }
+        },
+        {
+          "name": "POST Xác thực email (OTP)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"user.moi@example.com\",\n  \"otp\": \"123456\"\n}"
+            },
+            "url": "{{baseUrl}}/api/auth/verify-email",
+            "description": "Thay otp bằng mã 6 số từ log/email."
+          }
+        },
+        {
+          "name": "POST Đăng nhập (khách) → lưu tokenKhach",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "try {",
+                  "  const j = pm.response.json();",
+                  "  if (pm.response.code === 200 && j.accessToken) {",
+                  "    pm.collectionVariables.set('tokenKhach', j.accessToken);",
+                  "    pm.test('Đã lưu JWT vào biến collection tokenKhach', function () {",
+                  "      pm.expect(j.accessToken).to.be.a('string');",
+                  "    });",
+                  "    console.log('tokenKhach đã cập nhật');",
+                  "  }",
+                  "} catch (e) { console.warn('Tests login khách:', e); }"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"khachhang.a@gmail.com\",\n  \"password\": \"123456\"\n}"
+            },
+            "url": "{{baseUrl}}/api/auth/login",
+            "description": "**Role:** `KHACH_HANG`. Sau **Send**, script **Tests** tự điền biến collection `tokenKhach` từ `accessToken`.\n\n**cURL — Bash / Git Bash**\n```bash\ncurl -s -X POST \"http://localhost:8080/api/auth/login\" \\\n  -H \"Content-Type: application/json\" \\\n  -d '{\"email\":\"khachhang.a@gmail.com\",\"password\":\"123456\"}'\n```\n\n**cURL — PowerShell**\n```powershell\n$body = @{ email = \"khachhang.a@gmail.com\"; password = \"123456\" } | ConvertTo-Json\nInvoke-RestMethod -Uri \"http://localhost:8080/api/auth/login\" -Method Post -Body $body -ContentType \"application/json; charset=utf-8\"\n```\n\nMật khẩu phải khớp DB (mẫu `data.sql` thường dùng MD5 của `123456`)."
+          }
+        },
+        {
+          "name": "POST Đăng nhập (admin) → lưu tokenAdmin",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "try {",
+                  "  const j = pm.response.json();",
+                  "  if (pm.response.code === 200 && j.accessToken) {",
+                  "    pm.collectionVariables.set('tokenAdmin', j.accessToken);",
+                  "    pm.test('Đã lưu JWT vào biến collection tokenAdmin', function () {",
+                  "      pm.expect(j.accessToken).to.be.a('string');",
+                  "    });",
+                  "    console.log('tokenAdmin đã cập nhật');",
+                  "  }",
+                  "} catch (e) { console.warn('Tests login admin:', e); }"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"admin.baoxuyen@gmail.com\",\n  \"password\": \"123456\"\n}"
+            },
+            "url": "{{baseUrl}}/api/auth/login",
+            "description": "**Role:** `QUAN_TRI`. Sau **Send**, script **Tests** tự điền biến collection `tokenAdmin` từ `accessToken`.\n\n**cURL — Bash / Git Bash**\n```bash\ncurl -s -X POST \"http://localhost:8080/api/auth/login\" \\\n  -H \"Content-Type: application/json\" \\\n  -d '{\"email\":\"admin.baoxuyen@gmail.com\",\"password\":\"123456\"}'\n```\n\n**cURL — PowerShell**\n```powershell\n$body = @{ email = \"admin.baoxuyen@gmail.com\"; password = \"123456\" } | ConvertTo-Json\nInvoke-RestMethod -Uri \"http://localhost:8080/api/auth/login\" -Method Post -Body $body -ContentType \"application/json; charset=utf-8\"\n```\n\nMật khẩu phải khớp tài khoản admin trong DB."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Auth — JWT",
+      "item": [
+        {
+          "name": "GET Thông tin tôi (/me)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{tokenKhach}}" }],
+            "url": "{{baseUrl}}/api/auth/me",
+            "description": "Dùng token bất kỳ sau login (có thể đổi header sang {{tokenAdmin}} để thử)."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Khách hàng (role KHACH_HANG)",
+      "item": [
+        {
+          "name": "PUT Cập nhật profile",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{tokenKhach}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"fullName\": \"Nguyễn Văn A\",\n  \"phone\": \"0923456789\"\n}"
+            },
+            "url": "{{baseUrl}}/api/accounts/me/profile"
+          }
+        },
+        {
+          "name": "PUT Đổi mật khẩu",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{tokenKhach}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"oldPassword\": \"123456\",\n  \"newPassword\": \"654321\",\n  \"confirmPassword\": \"654321\"\n}"
+            },
+            "url": "{{baseUrl}}/api/accounts/me/password"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Khách — đặt vé (JWT KHACH_HANG)",
+      "item": [
+        {
+          "name": "POST Đặt vé",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{tokenKhach}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"chuyenXeId\": 3,\n  \"maGhe\": [\"A04\"],\n  \"ghiChu\": \"Gần cửa sổ\"\n}"
+            },
+            "url": "{{baseUrl}}/api/me/booking/tickets",
+            "description": "Đổi `chuyenXeId` / `maGhe` theo GET catalog (ghế phải trùng quy ước A01… và còn trống)."
+          }
+        },
+        {
+          "name": "POST Thanh toán vé",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{tokenKhach}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phuongThuc\": \"VI_DIEN_TU\",\n  \"dongYDieuKhoan\": true\n}"
+            },
+            "url": "{{baseUrl}}/api/me/booking/tickets/1/pay",
+            "description": "Thay `1` bằng id vé (field `data.id` sau đặt vé)."
+          }
+        },
+        {
+          "name": "GET Vé của tôi",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{tokenKhach}}" }],
+            "url": "{{baseUrl}}/api/me/booking/tickets"
+          }
+        },
+        {
+          "name": "GET Chi tiết một vé",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{tokenKhach}}" }],
+            "url": "{{baseUrl}}/api/me/booking/tickets/1"
+          }
+        },
+        {
+          "name": "POST Hủy / yêu cầu hủy vé",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{tokenKhach}}" }],
+            "url": "{{baseUrl}}/api/me/booking/tickets/1/cancel"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Nhân viên — vé & chuyến (NHAN_VIEN hoặc QUAN_TRI)",
+      "item": [
+        {
+          "name": "GET Tra cứu vé (mã vé)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{tokenAdmin}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/api/staff/booking/tickets?maVe=VX20260410_001&soDienThoai=",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "staff", "booking", "tickets"],
+              "query": [
+                { "key": "maVe", "value": "VX20260410_001" },
+                { "key": "soDienThoai", "value": "" }
+              ]
+            },
+            "description": "Dùng `tokenAdmin` nếu chưa có tài khoản NHAN_VIEN. Hoặc một trong hai: maVe hoặc soDienThoai."
+          }
+        },
+        {
+          "name": "PATCH Cập nhật vé (ghi chú / đổi ghế)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{tokenAdmin}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"ghiChu\": \"Đổi chỗ theo yêu cầu\",\n  \"maGheMoi\": null\n}"
+            },
+            "url": "{{baseUrl}}/api/staff/booking/tickets/1"
+          }
+        },
+        {
+          "name": "POST Duyệt hủy vé",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{tokenAdmin}}" }],
+            "url": "{{baseUrl}}/api/staff/booking/tickets/1/approve-cancel"
+          }
+        },
+        {
+          "name": "PATCH Trạng thái chuyến",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{tokenAdmin}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"trangThai\": \"DANG_CHAY\"\n}"
+            },
+            "url": "{{baseUrl}}/api/staff/booking/trips/1/status"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Quản trị — tuyến & chuyến (QUAN_TRI)",
+      "item": [
+        {
+          "name": "GET Tất cả tuyến",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{tokenAdmin}}" }],
+            "url": "{{baseUrl}}/api/manager/routes"
+          }
+        },
+        {
+          "name": "POST Tạo tuyến",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{tokenAdmin}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tenTuyen\": \"Đà Lạt - Nha Trang\",\n  \"diemDi\": \"Đà Lạt\",\n  \"diemDen\": \"Nha Trang\",\n  \"khoangCach\": 120.5,\n  \"thoiGianDuKienPhut\": 180,\n  \"giaVeCoBan\": 150000\n}"
+            },
+            "url": "{{baseUrl}}/api/manager/routes"
+          }
+        },
+        {
+          "name": "PUT Sửa tuyến",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{tokenAdmin}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tenTuyen\": \"Sài Gòn - Đà Lạt\",\n  \"diemDi\": \"TP. Hồ Chí Minh\",\n  \"diemDen\": \"Đà Lạt\",\n  \"khoangCach\": 300,\n  \"thoiGianDuKienPhut\": 420,\n  \"giaVeCoBan\": 250000,\n  \"trangThai\": \"ACTIVE\"\n}"
+            },
+            "url": "{{baseUrl}}/api/manager/routes/1"
+          }
+        },
+        {
+          "name": "DELETE Tuyến (xóa hoặc INACTIVE nếu còn chuyến)",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Authorization", "value": "Bearer {{tokenAdmin}}" }],
+            "url": "{{baseUrl}}/api/manager/routes/99"
+          }
+        },
+        {
+          "name": "GET Tất cả chuyến",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{tokenAdmin}}" }],
+            "url": "{{baseUrl}}/api/manager/trips"
+          }
+        },
+        {
+          "name": "POST Tạo chuyến",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{tokenAdmin}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tuyenXeId\": 1,\n  \"xeId\": 1,\n  \"ngayDi\": \"2026-05-01\",\n  \"gioDi\": \"21:00:00\",\n  \"giaVe\": 260000\n}"
+            },
+            "url": "{{baseUrl}}/api/manager/trips",
+            "description": "Ngày giờ khởi hành phải trong tương lai (server validate)."
+          }
+        },
+        {
+          "name": "PUT Sửa chuyến",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{tokenAdmin}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tuyenXeId\": 1,\n  \"xeId\": 1,\n  \"ngayDi\": \"2026-05-02\",\n  \"gioDi\": \"21:00:00\",\n  \"giaVe\": 260000,\n  \"trangThai\": \"CHUA_KHOI_HANH\"\n}"
+            },
+            "url": "{{baseUrl}}/api/manager/trips/1"
+          }
+        },
+        {
+          "name": "DELETE Hủy chuyến (soft)",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Authorization", "value": "Bearer {{tokenAdmin}}" }],
+            "url": "{{baseUrl}}/api/manager/trips/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Quản trị (role QUAN_TRI)",
+      "item": [
+        {
+          "name": "GET Danh sách khách hàng",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{tokenAdmin}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/customers?page=0&size=10&search=",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "customers"],
+              "query": [
+                { "key": "page", "value": "0" },
+                { "key": "size", "value": "10" },
+                { "key": "search", "value": "", "description": "tùy chọn: tên / SĐT / email" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "GET Chi tiết khách + vé",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{tokenAdmin}}" }],
+            "url": "{{baseUrl}}/api/admin/customers/2"
+          }
+        },
+        {
+          "name": "GET Danh sách nhân viên",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{tokenAdmin}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/staffs?page=0&size=10&search=",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "staffs"],
+              "query": [
+                { "key": "page", "value": "0" },
+                { "key": "size", "value": "10" },
+                { "key": "search", "value": "" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "POST Tạo nhân viên",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{tokenAdmin}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"nhanvien.moi@example.com\",\n  \"password\": \"matkhau12\",\n  \"fullName\": \"Nhân Viên Mới\"\n}"
+            },
+            "url": "{{baseUrl}}/api/admin/staffs"
+          }
+        },
+        {
+          "name": "PUT Cập nhật trạng thái nhân viên",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{tokenAdmin}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"INACTIVE\"\n}"
+            },
+            "url": "{{baseUrl}}/api/admin/staffs/1/status"
+          }
+        }
+      ]
+    }
+  ]
+}

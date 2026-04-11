@@ -1,11 +1,10 @@
 package com.banvexe.accountmanagement.dto;
 
-public record UserProfileResponse(
+public record CustomerSummaryResponse(
     Integer id,
     String email,
     String fullName,
     String phone,
-    String role,
     String status
 ) {
 }
