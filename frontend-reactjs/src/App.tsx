@@ -15,6 +15,12 @@ import SchedulePage from './pages/public/SchedulePage';
 import TicketSearchPage from './pages/public/TicketSearchPage';
 import InvoicePage from './pages/public/InvoicePage';
 import ContactPage from './pages/public/ContactPage';
+import BookingGuidePage from './pages/public/BookingGuidePage';
+import BookingPage from './pages/public/BookingPage';
+import PaymentPage from './pages/public/PaymentPage';
+import CustomerProfilePage from './pages/public/CustomerProfilePage';
+import CustomerTicketHistoryPage from './pages/public/CustomerTicketHistoryPage';
+import CustomerChangePasswordPage from './pages/public/CustomerChangePasswordPage';
 
 import './index.css';
 
@@ -26,8 +32,14 @@ function App() {
           <Route index element={<HomePage />} />
           <Route path='lich-trinh' element={<SchedulePage />} />
           <Route path='tra-cuu-ve' element={<TicketSearchPage />} />
+          <Route path='dat-ve' element={<BookingPage />} />
+          <Route path='thanh-toan' element={<PaymentPage />} />
           <Route path='hoa-don' element={<InvoicePage />} />
           <Route path='lien-he' element={<ContactPage />} />
+          <Route path='huong-dan-dat-ve' element={<BookingGuidePage />} />
+          <Route path='tai-khoan/thong-tin' element={<CustomerProfilePage />} />
+          <Route path='tai-khoan/lich-su-mua-ve' element={<CustomerTicketHistoryPage />} />
+          <Route path='tai-khoan/dat-lai-mat-khau' element={<CustomerChangePasswordPage />} />
         </Route>
 
         <Route path='/login' element={<LoginPage />} />

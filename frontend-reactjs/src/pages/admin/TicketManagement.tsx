@@ -1,9 +1,7 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Ticket,
   RefreshCw,
-  ChevronLeft,
-  ChevronRight,
   Filter,
   Layers,
   Clock,
@@ -13,9 +11,11 @@ import {
   PartyPopper,
   Pencil,
   Trash2,
+  Search,
 } from 'lucide-react';
 import { api } from '../../api/client';
 import AdminPageStats from '../../components/admin/AdminPageStats';
+import AdminListPagination, { ADMIN_PAGE_SIZE } from '../../components/admin/AdminListPagination';
 
 const STATUSES = [
   'ALL',
@@ -145,7 +145,6 @@ function apiErrMessage(err: unknown): string {
 
 const TicketManagement: React.FC = () => {
   const [page, setPage] = useState(0);
-  const [size] = useState(50);
   const [status, setStatus] = useState<(typeof STATUSES)[number]>('ALL');
   const [data, setData] = useState<PageData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -176,6 +175,7 @@ const TicketManagement: React.FC = () => {
     daHuy: 0,
     hoanThanh: 0,
   });
+  const [ticketSearch, setTicketSearch] = useState('');
 
   const loadStats = useCallback(async () => {
     setStatsLoading(true);
@@ -205,27 +205,32 @@ const TicketManagement: React.FC = () => {
     setLoading(true);
     setLoadErr(null);
     try {
-      const params: Record<string, string | number> = { page, size };
+      const params: Record<string, string | number> = { page, size: ADMIN_PAGE_SIZE };
       if (status !== 'ALL') params.status = status;
       const { data: body } = await api.get('/api/manager/tickets', { params });
       const p = body?.data;
       if (p && Array.isArray(p.content)) {
         setData(p as PageData);
       } else {
-        setData({ content: [], page: 0, size, totalElements: 0, totalPages: 0 });
+        setData({ content: [], page: 0, size: ADMIN_PAGE_SIZE, totalElements: 0, totalPages: 0 });
       }
     } catch (e) {
       console.error(e);
-      setData({ content: [], page: 0, size, totalElements: 0, totalPages: 0 });
+      setData({ content: [], page: 0, size: ADMIN_PAGE_SIZE, totalElements: 0, totalPages: 0 });
       setLoadErr(apiErrMessage(e));
     } finally {
       setLoading(false);
     }
-  }, [page, size, status]);
+  }, [page, status]);
 
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    const tp = data?.totalPages ?? 0;
+    if (tp > 0 && page > tp - 1) setPage(tp - 1);
+  }, [data?.totalPages, page]);
 
   useEffect(() => {
     void loadStats();
@@ -362,6 +367,30 @@ const TicketManagement: React.FC = () => {
   const total = data?.totalElements ?? 0;
   const list = data?.content ?? [];
 
+  const displayTickets = useMemo(() => {
+    const q = ticketSearch.trim().toLowerCase();
+    const sorted = [...list].sort((a, b) => a.id - b.id);
+    if (!q) return sorted;
+    return sorted.filter((row) => {
+      const gNote = pickGhiChuFromRow(row);
+      const hay = [
+        String(row.id),
+        row.maVe,
+        row.hoTenKhach,
+        row.emailKhach,
+        row.tenTuyen,
+        row.ngayChuyen,
+        formatGio(row.gioChuyen),
+        row.trangThai,
+        String(row.tongTien),
+        gNote || '',
+      ]
+        .join(' ')
+        .toLowerCase();
+      return hay.includes(q);
+    });
+  }, [list, ticketSearch]);
+
   return (
     <div className="flex flex-col gap-5 animate-fade-in">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -433,8 +462,24 @@ const TicketManagement: React.FC = () => {
       )}
 
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-        <div className="px-4 py-2 border-b border-gray-100 text-xs text-gray-500">
-          Trang: {data?.content?.length ?? 0} dòng (tổng thỏa lọc: {total} vé{status !== 'ALL' ? `, lọc: ${status}` : ''})
+        <div className="flex flex-col gap-2 border-b border-gray-100 bg-gray-50/60 px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-xs text-gray-600">
+            Trang API <span className="font-semibold text-gray-800">{list.length > 0 ? page + 1 : 0}</span> /{' '}
+            <span className="font-semibold text-gray-800">{totalPages || 0}</span> — khớp từ khóa trên trang này:{' '}
+            <span className="font-semibold text-gray-800">{displayTickets.length}</span> / {list.length} dòng (tổng{' '}
+            {total} vé
+            {status !== 'ALL' ? `, lọc: ${status}` : ''})
+          </p>
+          <div className="relative w-full sm:max-w-sm">
+            <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+            <input
+              type="search"
+              value={ticketSearch}
+              onChange={(e) => setTicketSearch(e.target.value)}
+              placeholder="Tìm ID, mã vé, khách, email, tuyến… (trang hiện tại)"
+              className="w-full rounded-lg border border-gray-200 bg-white py-2 pl-9 pr-3 text-sm outline-none focus:border-[#ef5222] focus:ring-1 focus:ring-[#ef5222]/20"
+            />
+          </div>
         </div>
         <div className="overflow-x-auto">
           <table className="min-w-full text-sm">
@@ -463,8 +508,14 @@ const TicketManagement: React.FC = () => {
                     Không có vé nào.
                   </td>
                 </tr>
+              ) : displayTickets.length === 0 ? (
+                <tr>
+                  <td colSpan={8} className="px-4 py-8 text-center text-gray-500">
+                    Không có vé khớp &quot;{ticketSearch}&quot; trên trang này.
+                  </td>
+                </tr>
               ) : (
-                list.map((row) => {
+                displayTickets.map((row) => {
                   const gNote = pickGhiChuFromRow(row);
                   return (
                     <tr key={row.id} className="border-t border-gray-100 hover:bg-gray-50/80">
@@ -516,29 +567,7 @@ const TicketManagement: React.FC = () => {
             </tbody>
           </table>
         </div>
-        {totalPages > 1 && (
-          <div className="flex items-center justify-center gap-4 py-3 border-t border-gray-100">
-            <button
-              type="button"
-              disabled={page <= 0}
-              onClick={() => setPage((p) => Math.max(0, p - 1))}
-              className="p-1.5 rounded-lg border border-gray-200 disabled:opacity-40"
-            >
-              <ChevronLeft size={18} />
-            </button>
-            <span className="text-sm text-gray-600">
-              Trang {page + 1} / {totalPages}
-            </span>
-            <button
-              type="button"
-              disabled={page + 1 >= totalPages}
-              onClick={() => setPage((p) => p + 1)}
-              className="p-1.5 rounded-lg border border-gray-200 disabled:opacity-40"
-            >
-              <ChevronRight size={18} />
-            </button>
-          </div>
-        )}
+        <AdminListPagination page={page} total={total} pageSize={ADMIN_PAGE_SIZE} onPageChange={setPage} />
       </div>
 
       {modalId != null && (

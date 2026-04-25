@@ -14,12 +14,15 @@ import com.banvexe.accountmanagement.entity.Xe;
 import com.banvexe.accountmanagement.repository.ChiTietVeRepository;
 import com.banvexe.accountmanagement.repository.ChuyenXeRepository;
 import com.banvexe.accountmanagement.repository.TuyenXeRepository;
+import java.text.Normalizer;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -114,7 +117,7 @@ public class BookingCatalogService {
             );
         }
         Set<String> occupied = new HashSet<>(chiTietVeRepository.findOccupiedSeatCodes(c.getId(), STATUSES_BLOCKING_SEAT));
-        List<String> labels = generateSeatLabels(soGhe);
+        List<String> labels = generateSeatLabels(c);
         List<SeatStatusDto> seats = labels.stream()
             .map(l -> new SeatStatusDto(l, occupied.contains(l)))
             .toList();
@@ -217,10 +220,67 @@ public class BookingCatalogService {
         return keyword == null ? "" : keyword.trim();
     }
 
+    public static List<String> generateSeatLabels(ChuyenXe c) {
+        int soGhe = safeTongGhe(c);
+        String loaiXe = c != null && c.getXe() != null ? c.getXe().getLoaiXe() : null;
+        return generateSeatLabels(soGhe, loaiXe);
+    }
+
     /**
-     * Sinh nhãn ghế (A01, A02, …) để hiển thị sơ đồ; dữ liệu thật trong DB có thể dùng cùng quy ước khi đặt vé.
+     * Sinh nhãn ghế theo loại xe để lưu DB và validate thống nhất với giao diện cũ:
+     * - Giường nằm: A01.. (tầng dưới), B01.. (tầng trên)
+     * - Loại khác: 01, 02, ... (tăng dần)
      */
+    public static List<String> generateSeatLabels(int soGhe, String loaiXe) {
+        List<String> labels = new ArrayList<>(soGhe);
+        if (soGhe <= 0) {
+            return labels;
+        }
+        String vt = normalizeVehicleType(loaiXe);
+        if (vt.contains("giuong")) {
+            int lowerCount = (soGhe + 1) / 2;
+            int upperCount = soGhe - lowerCount;
+            for (int i = 1; i <= lowerCount; i++) {
+                labels.add(String.format("A%02d", i));
+            }
+            for (int i = 1; i <= upperCount; i++) {
+                labels.add(String.format("B%02d", i));
+            }
+            return labels;
+        }
+        for (int i = 0; i < soGhe; i++) {
+            labels.add(String.format("%02d", i + 1));
+        }
+        return labels;
+    }
+
     public static List<String> generateSeatLabels(int soGhe) {
+        return generateSeatLabels(soGhe, null);
+    }
+
+    /**
+     * Chuẩn hóa mã ghế client gửi về mã canonical theo loại xe.
+     * Hỗ trợ tương thích nhãn cũ dạng lưới A01, A02... (legacy).
+     */
+    public static String normalizeSeatCode(ChuyenXe c, String seatCode) {
+        if (seatCode == null) return null;
+        String normalizedInput = seatCode.trim().toUpperCase();
+        if (normalizedInput.isEmpty()) return null;
+
+        List<String> canonical = generateSeatLabels(c);
+        if (canonical.isEmpty()) return null;
+        Map<String, String> aliasToCanonical = new LinkedHashMap<>();
+        for (String s : canonical) {
+            aliasToCanonical.put(s, s);
+        }
+        List<String> legacy = generateLegacyGridLabels(canonical.size());
+        for (int i = 0; i < Math.min(canonical.size(), legacy.size()); i++) {
+            aliasToCanonical.putIfAbsent(legacy.get(i), canonical.get(i));
+        }
+        return aliasToCanonical.get(normalizedInput);
+    }
+
+    private static List<String> generateLegacyGridLabels(int soGhe) {
         int cols = soGhe <= 9 ? 3 : 4;
         List<String> labels = new ArrayList<>(soGhe);
         for (int i = 0; i < soGhe; i++) {
@@ -230,5 +290,11 @@ public class BookingCatalogService {
             labels.add(String.format("%c%02d", rowChar, col));
         }
         return labels;
+    }
+
+    private static String normalizeVehicleType(String loaiXe) {
+        if (loaiXe == null) return "";
+        String s = loaiXe.trim().toLowerCase();
+        return Normalizer.normalize(s, Normalizer.Form.NFD).replaceAll("\\p{M}", "");
     }
 }

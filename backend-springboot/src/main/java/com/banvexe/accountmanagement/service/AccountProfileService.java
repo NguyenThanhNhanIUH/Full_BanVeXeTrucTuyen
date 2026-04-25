@@ -23,6 +23,12 @@ public class AccountProfileService {
         this.passwordService = passwordService;
     }
 
+    public CustomerProfileResponse getProfile(String email) {
+        UserAccount user = userAccountRepository.findByEmail(normalizeEmail(email))
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Không tìm thấy tài khoản"));
+        return toProfileResponse(user);
+    }
+
     public CustomerProfileResponse updateProfile(String email, UpdateProfileRequest request) {
         UserAccount user = userAccountRepository.findByEmail(normalizeEmail(email))
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Không tìm thấy tài khoản"));

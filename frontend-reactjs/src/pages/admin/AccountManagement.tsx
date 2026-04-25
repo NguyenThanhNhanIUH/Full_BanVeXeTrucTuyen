@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   Search,
   Plus,
@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { api } from '../../api/client';
 import AdminPageStats from '../../components/admin/AdminPageStats';
+import AdminListPagination, { ADMIN_PAGE_SIZE } from '../../components/admin/AdminListPagination';
 
 function toNum(v: unknown): number {
   if (typeof v === 'number' && !Number.isNaN(v)) return v;
@@ -53,6 +54,7 @@ const AccountManagement: React.FC = () => {
     locked: 0,
     total: 0,
   });
+  const [tablePage, setTablePage] = useState(0);
 
   const apiUrl = '/api';
 
@@ -110,11 +112,35 @@ const AccountManagement: React.FC = () => {
     void fetchStats();
   }, [fetchStats]);
 
-  const filteredAccounts = accounts.filter(acc => 
-    acc.email.toLowerCase().includes(searchTerm.toLowerCase()) || 
-    acc.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    acc.phone?.includes(searchTerm)
-  );
+  const q = searchTerm.trim().toLowerCase();
+  const filteredAccounts = useMemo(() => {
+    return accounts.filter((acc) => {
+      if (!q) return true;
+      return (
+        String(acc.id).includes(q) ||
+        acc.email.toLowerCase().includes(q) ||
+        acc.name.toLowerCase().includes(q) ||
+        (acc.phone?.toLowerCase().includes(q) ?? false)
+      );
+    });
+  }, [accounts, q]);
+
+  useEffect(() => {
+    setTablePage(0);
+  }, [searchTerm, activeTab]);
+
+  const accountTotalPages =
+    filteredAccounts.length === 0 ? 0 : Math.max(1, Math.ceil(filteredAccounts.length / ADMIN_PAGE_SIZE));
+
+  useEffect(() => {
+    const maxP = Math.max(0, accountTotalPages - 1);
+    if (tablePage > maxP) setTablePage(maxP);
+  }, [accountTotalPages, tablePage]);
+
+  const pageAccounts = useMemo(() => {
+    const start = tablePage * ADMIN_PAGE_SIZE;
+    return filteredAccounts.slice(start, start + ADMIN_PAGE_SIZE);
+  }, [filteredAccounts, tablePage]);
 
   const openModal = (mode: 'ADD' | 'EDIT', account?: Account) => {
     setModalMode(mode);
@@ -241,7 +267,7 @@ const AccountManagement: React.FC = () => {
       />
 
       <div className='bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden'>
-        <div className='p-4 border-b border-gray-200 flex flex-col sm:flex-row justify-between items-center gap-3 bg-gray-50/50'>
+        <div className='p-3 border-b border-gray-200 bg-gray-50/60'>
           <div className='flex space-x-1 bg-gray-200/50 p-1 rounded-lg w-full sm:w-auto'>
             <button 
               onClick={() => setActiveTab('CUSTOMER')}
@@ -256,15 +282,18 @@ const AccountManagement: React.FC = () => {
               Nhân Viên
             </button>
           </div>
-          
-          <div className='relative w-full sm:w-72'>
-            <div className='absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none'>
-              <Search size={16} className='text-gray-400' />
-            </div>
+        </div>
+        <div className="flex flex-col gap-2 border-b border-gray-100 bg-gray-50/60 px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-xs text-gray-600">
+            Khớp lọc: <span className="font-semibold text-gray-800">{filteredAccounts.length}</span> / {accounts.length} tài khoản (mỗi trang {ADMIN_PAGE_SIZE})
+            {q ? ' (đã lọc)' : ''}
+          </p>
+          <div className="relative w-full sm:max-w-sm">
+            <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
             <input
-              type='text'
-              className='block w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-[#ef5222] focus:border-[#ef5222] transition-colors text-sm shadow-sm'
-              placeholder='Tìm Email, Tên, SĐT...'
+              type="search"
+              className="w-full rounded-lg border border-gray-200 bg-white py-2 pl-9 pr-3 text-sm outline-none focus:border-[#ef5222] focus:ring-1 focus:ring-[#ef5222]/20"
+              placeholder="Tìm ID, email, tên, SĐT…"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
@@ -293,7 +322,7 @@ const AccountManagement: React.FC = () => {
                   </td>
                 </tr>
               ) : filteredAccounts.length > 0 ? (
-                filteredAccounts.map((account) => (
+                pageAccounts.map((account) => (
                   <tr key={account.id} className='hover:bg-orange-50/40 transition-colors'>
                     <td className='px-5 py-3'>
                       <div className='flex items-center'>
@@ -378,15 +407,7 @@ const AccountManagement: React.FC = () => {
             </tbody>
           </table>
         </div>
-        
-        <div className="p-4 border-t border-gray-100 bg-gray-50/50 flex justify-between items-center text-sm text-gray-600">
-          <span>Hiển thị 1 - {filteredAccounts.length} trong tổng số {filteredAccounts.length} tài khoản</span>
-          <div className="flex gap-1">
-            <button className="px-3 py-1 border border-gray-300 bg-white rounded hover:bg-gray-50 disabled:opacity-50" disabled>Trước</button>
-            <button className="px-3 py-1 border border-[#ef5222] bg-[#ef5222] text-white rounded">1</button>
-            <button className="px-3 py-1 border border-gray-300 bg-white rounded hover:bg-gray-50 disabled:opacity-50" disabled>Sau</button>
-          </div>
-        </div>
+        <AdminListPagination page={tablePage} total={filteredAccounts.length} onPageChange={setTablePage} />
       </div>
 
       {isModalOpen && (

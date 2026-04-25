@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Calendar, MapPin, Users } from 'lucide-react';
 import axios from 'axios';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import bannerImage from '../../assets/banner.png';
 import tphcmImage from '../../assets/TPHCM.png';
 import daLatImage from '../../assets/DaLat.png';
@@ -47,6 +48,7 @@ type SeatMapResponse = {
 type UiSeat = {
   maGhe: string;
   daBan: boolean;
+  hienThiGhe?: string;
 };
 
 type SeatLayout = {
@@ -79,8 +81,24 @@ type SelectedTripInfo = {
 
 type TimeFilterKey = 'early' | 'morning' | 'afternoon' | 'evening';
 type VehicleFilterKey = 'ghe' | 'giuong' | 'limousine';
+type ResultTab = 'outbound' | 'return';
+type HomeRestoreState = {
+  search: SearchCriteria;
+  outboundTrips: TripSummary[];
+  returnTrips: TripSummary[];
+  activeResultTab: ResultTab;
+  chuyenDiDaChon: TripSummary | null;
+  chuyenVeDaChon: TripSummary | null;
+  chuyenChonDauTien: TripSummary | null;
+  gheDangChonTheoChuyen: Record<number, string[]>;
+  tripIdsDaMoChonGhe: number[];
+  tripDangNoiBatId: number | null;
+  focusTripId?: number | null;
+};
 
 const HomePage = () => {
+  const navigate = useNavigate();
+  const location = useLocation();
   const [tripType, setTripType] = useState<'one-way' | 'round-trip'>('one-way');
   const [diemDi, setDiemDi] = useState('');
   const [diemDen, setDiemDen] = useState('');
@@ -91,6 +109,13 @@ const HomePage = () => {
   const [goiYDiemDi, setGoiYDiemDi] = useState<string[]>([]);
   const [goiYDiemDen, setGoiYDiemDen] = useState<string[]>([]);
   const [danhSachChuyen, setDanhSachChuyen] = useState<TripSummary[]>([]);
+  const [danhSachChuyenVe, setDanhSachChuyenVe] = useState<TripSummary[]>([]);
+  const [activeResultTab, setActiveResultTab] = useState<ResultTab>('outbound');
+  const [chuyenDiDaChon, setChuyenDiDaChon] = useState<TripSummary | null>(null);
+  const [chuyenVeDaChon, setChuyenVeDaChon] = useState<TripSummary | null>(null);
+  const [chuyenChonDauTien, setChuyenChonDauTien] = useState<TripSummary | null>(null);
+  const [tripIdsDaMoChonGhe, setTripIdsDaMoChonGhe] = useState<number[]>([]);
+  const [tripDangNoiBatId, setTripDangNoiBatId] = useState<number | null>(null);
   const [daTimKiem, setDaTimKiem] = useState(false);
   const [thongBaoTimKiem, setThongBaoTimKiem] = useState('');
   const [tieuChiDaTim, setTieuChiDaTim] = useState<SearchCriteria | null>(null);
@@ -291,6 +316,12 @@ const HomePage = () => {
     setTripDangChonGhe(null);
     setSelectedTripInfo(null);
     setGheDangChonTheoChuyen({});
+    setActiveResultTab('outbound');
+    setChuyenDiDaChon(null);
+    setChuyenVeDaChon(null);
+    setChuyenChonDauTien(null);
+    setTripIdsDaMoChonGhe([]);
+    setTripDangNoiBatId(null);
     setTieuChiDaTim({
       diemDi: diemDi.trim(),
       diemDen: diemDen.trim(),
@@ -300,25 +331,49 @@ const HomePage = () => {
       tripType,
     });
     try {
-      const { data } = await axios.get<{ data?: TripSummary[] }>('/api/catalog/trips', {
-        params: {
-          diemDi: diemDi.trim(),
-          diemDen: diemDen.trim(),
-          ngayDi: ngayDi || undefined,
-          soLuongVeToiThieu: Number(soVe),
-        },
-      });
-      const trips = data?.data ?? [];
+      const [outboundRes, returnRes] = await Promise.all([
+        axios.get<{ data?: TripSummary[] }>('/api/catalog/trips', {
+          params: {
+            diemDi: diemDi.trim(),
+            diemDen: diemDen.trim(),
+            ngayDi: ngayDi || undefined,
+            soLuongVeToiThieu: Number(soVe),
+          },
+        }),
+        tripType === 'round-trip'
+          ? axios.get<{ data?: TripSummary[] }>('/api/catalog/trips', {
+              params: {
+                diemDi: diemDen.trim(),
+                diemDen: diemDi.trim(),
+                ngayDi: ngayVe || undefined,
+                soLuongVeToiThieu: Number(soVe),
+              },
+            })
+          : Promise.resolve({ data: { data: [] } }),
+      ]);
+      const trips = outboundRes.data?.data ?? [];
+      const returnTrips = returnRes.data?.data ?? [];
       setDanhSachChuyen(trips);
-      if (!trips.length) {
+      setDanhSachChuyenVe(returnTrips);
+      if (!trips.length && (tripType !== 'round-trip' || !returnTrips.length)) {
         setThongBaoTimKiem('Hiện chưa có chuyến phù hợp. Vui lòng thử ngày hoặc tuyến khác.');
       }
     } catch {
       setDanhSachChuyen([]);
+      setDanhSachChuyenVe([]);
       setThongBaoTimKiem('Không thể tìm chuyến lúc này. Vui lòng thử lại sau.');
     } finally {
       setDangTimChuyen(false);
     }
+  };
+
+  const onSwapPlaces = () => {
+    const nextDiemDi = diemDen;
+    const nextDiemDen = diemDi;
+    setDiemDi(nextDiemDi);
+    setDiemDen(nextDiemDen);
+    setGoiYDiemDi([]);
+    setGoiYDiemDen([]);
   };
 
   const toggleChonGhe = async (tripId: number) => {
@@ -328,8 +383,16 @@ const HomePage = () => {
     }
     setGheDangChonTheoChuyen({});
     setTripDangChonGhe(tripId);
-    const trip = danhSachChuyen.find((t) => t.id === tripId);
+    setTripDangNoiBatId(tripId);
+    setTripIdsDaMoChonGhe((prev) => (prev.includes(tripId) ? prev : [...prev, tripId]));
+    const trip = [...danhSachChuyen, ...danhSachChuyenVe].find((t) => t.id === tripId);
     if (trip) {
+      if (activeResultTab === 'outbound') {
+        setChuyenDiDaChon(trip);
+      } else {
+        setChuyenVeDaChon(trip);
+      }
+      if (!chuyenChonDauTien) setChuyenChonDauTien(trip);
       const durationFromRoute = trip.thoiGianDuKienPhut ?? (await getRouteDurationFallback(trip));
       const gioDenTinhToan = trip.gioDenDuKien || addMinutesToTime(trip.gioDi, durationFromRoute);
       setSelectedTripInfo({
@@ -365,6 +428,14 @@ const HomePage = () => {
 
   const onSelectSeat = (tripId: number, seat: SeatStatus) => {
     if (seat.daBan) return;
+    setTripDangNoiBatId(tripId);
+    setTripIdsDaMoChonGhe((prev) => (prev.includes(tripId) ? prev : [...prev, tripId]));
+    const trip = [...danhSachChuyen, ...danhSachChuyenVe].find((t) => t.id === tripId);
+    if (trip) {
+      if (activeResultTab === 'outbound') setChuyenDiDaChon(trip);
+      if (activeResultTab === 'return') setChuyenVeDaChon(trip);
+      if (!chuyenChonDauTien) setChuyenChonDauTien(trip);
+    }
     setGheDangChonTheoChuyen((prev) => {
       const current = prev[tripId] ?? [];
       if (current.includes(seat.maGhe)) {
@@ -378,46 +449,247 @@ const HomePage = () => {
     });
   };
 
+  useEffect(() => {
+    const state = location.state as
+      | {
+          homeRestoreState?: HomeRestoreState;
+          reopenTrip?: {
+            id: number;
+            tenTuyen: string;
+            diemDi: string;
+            diemDen: string;
+            ngayDi: string;
+            gioDi: string;
+            gioDenDuKien?: string;
+            thoiGianDuKienPhut?: number;
+            giaVe: number;
+            loaiXe?: string;
+          };
+          selectedSeats?: string[];
+        }
+      | undefined;
+    const restoredHome = state?.homeRestoreState;
+    if (restoredHome) {
+      setTripType(restoredHome.search.tripType);
+      setDiemDi(restoredHome.search.diemDi);
+      setDiemDen(restoredHome.search.diemDen);
+      setNgayDi(restoredHome.search.ngayDi);
+      setNgayVe(restoredHome.search.ngayVe);
+      setSoVe(restoredHome.search.soVe);
+      setDaTimKiem(true);
+      setThongBaoTimKiem('');
+      setTieuChiDaTim(restoredHome.search);
+      setDanhSachChuyen(restoredHome.outboundTrips);
+      setDanhSachChuyenVe(restoredHome.returnTrips);
+      setActiveResultTab(restoredHome.activeResultTab);
+      setChuyenDiDaChon(restoredHome.chuyenDiDaChon);
+      setChuyenVeDaChon(restoredHome.chuyenVeDaChon);
+      setChuyenChonDauTien(restoredHome.chuyenChonDauTien);
+      setGheDangChonTheoChuyen(restoredHome.gheDangChonTheoChuyen);
+      setTripIdsDaMoChonGhe(restoredHome.tripIdsDaMoChonGhe);
+      setTripDangNoiBatId(restoredHome.tripDangNoiBatId);
+      const focusTripId = restoredHome.focusTripId ?? restoredHome.tripDangNoiBatId;
+      if (focusTripId) {
+        setTripDangChonGhe(focusTripId);
+        window.requestAnimationFrame(() => {
+          const card = document.getElementById(`trip-card-${focusTripId}`);
+          card?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        });
+      }
+      navigate(location.pathname, { replace: true, state: null });
+      return;
+    }
+
+    const reopenTrip = state?.reopenTrip;
+    if (!reopenTrip) return;
+
+    const restoredTrip: TripSummary = {
+      id: reopenTrip.id,
+      tenTuyen: reopenTrip.tenTuyen,
+      diemDi: reopenTrip.diemDi,
+      diemDen: reopenTrip.diemDen,
+      ngayDi: reopenTrip.ngayDi,
+      gioDi: reopenTrip.gioDi,
+      gioDenDuKien: reopenTrip.gioDenDuKien,
+      thoiGianDuKienPhut: reopenTrip.thoiGianDuKienPhut,
+      khoangCach: undefined,
+      giaVe: reopenTrip.giaVe,
+      loaiXe: reopenTrip.loaiXe || '',
+      soGheTrong: 0,
+    };
+
+    setDaTimKiem(true);
+    setThongBaoTimKiem('');
+    setDanhSachChuyen((prev) => {
+      const existed = prev.find((t) => t.id === restoredTrip.id);
+      return existed
+        ? prev.map((t) => (t.id === restoredTrip.id ? { ...t, ...restoredTrip } : t))
+        : [restoredTrip, ...prev];
+    });
+    setTripDangChonGhe(restoredTrip.id);
+    setSelectedTripInfo({
+      id: restoredTrip.id,
+      tenTuyen: restoredTrip.tenTuyen,
+      diemDi: restoredTrip.diemDi,
+      diemDen: restoredTrip.diemDen,
+      ngayDi: restoredTrip.ngayDi,
+      gioDi: restoredTrip.gioDi,
+      gioDenDuKien: restoredTrip.gioDenDuKien,
+      thoiGianDuKienPhut: restoredTrip.thoiGianDuKienPhut,
+      khoangCach: restoredTrip.khoangCach,
+    });
+    setGheDangChonTheoChuyen((prev) => ({ ...prev, [restoredTrip.id]: state?.selectedSeats ?? [] }));
+
+    if (!soDoGheTheoChuyen[restoredTrip.id]) {
+      setDangTaiSoDoGhe(true);
+      axios
+        .get<{ data?: SeatMapResponse }>(`/api/catalog/trips/${restoredTrip.id}/seats`)
+        .then((res) => {
+          const seatMap = res.data?.data;
+          if (!seatMap) return;
+          setSoDoGheTheoChuyen((prev) => ({ ...prev, [restoredTrip.id]: seatMap }));
+        })
+        .catch(() => {
+          window.alert('Không thể tải lại sơ đồ ghế của chuyến đã chọn.');
+        })
+        .finally(() => setDangTaiSoDoGhe(false));
+    }
+
+    navigate(location.pathname, { replace: true, state: null });
+  }, [location.pathname, location.state, navigate, soDoGheTheoChuyen]);
+
+  const mapTripForBooking = (trip: TripSummary) => ({
+    id: trip.id,
+    tenTuyen: trip.tenTuyen,
+    diemDi: trip.diemDi,
+    diemDen: trip.diemDen,
+    ngayDi: trip.ngayDi,
+    gioDi: trip.gioDi,
+    gioDenDuKien: trip.gioDenDuKien || addMinutesToTime(trip.gioDi, trip.thoiGianDuKienPhut),
+    thoiGianDuKienPhut: trip.thoiGianDuKienPhut,
+    giaVe: Number(trip.giaVe || 0),
+    loaiXe: trip.loaiXe,
+  });
+
+  const buildHomeRestoreState = (focusTripId?: number | null): HomeRestoreState => ({
+    search: {
+      diemDi,
+      diemDen,
+      ngayDi,
+      ngayVe,
+      soVe,
+      tripType,
+    },
+    outboundTrips: danhSachChuyen,
+    returnTrips: danhSachChuyenVe,
+    activeResultTab,
+    chuyenDiDaChon,
+    chuyenVeDaChon,
+    chuyenChonDauTien,
+    gheDangChonTheoChuyen,
+    tripIdsDaMoChonGhe,
+    tripDangNoiBatId,
+    focusTripId: focusTripId ?? tripDangNoiBatId ?? null,
+  });
+
+  const onChooseTrip = (trip: TripSummary) => {
+    setTripDangNoiBatId(trip.id);
+    if (tripType !== 'round-trip') {
+      navigate('/dat-ve', {
+        state: {
+          tripType: 'one-way',
+          trip: mapTripForBooking(trip),
+          selectedSeats: gheDangChonTheoChuyen[trip.id] ?? [],
+          homeRestoreState: buildHomeRestoreState(trip.id),
+        },
+      });
+      return;
+    }
+    if (activeResultTab === 'outbound') setChuyenDiDaChon(trip);
+    if (activeResultTab === 'return') setChuyenVeDaChon(trip);
+
+    if (!chuyenChonDauTien) {
+      setChuyenChonDauTien(trip);
+      setActiveResultTab(activeResultTab === 'outbound' ? 'return' : 'outbound');
+      setTripDangChonGhe(null);
+      setSelectedTripInfo(null);
+      return;
+    }
+
+    const outbound = activeResultTab === 'outbound' ? trip : chuyenDiDaChon;
+    const ret = activeResultTab === 'return' ? trip : chuyenVeDaChon;
+    if (!outbound || !ret) {
+      setActiveResultTab(activeResultTab === 'outbound' ? 'return' : 'outbound');
+      return;
+    }
+    navigate('/dat-ve', {
+      state: {
+        tripType: 'round-trip',
+        outboundTrip: mapTripForBooking(outbound),
+        returnTrip: mapTripForBooking(ret),
+        selectedSeatsOutbound: gheDangChonTheoChuyen[outbound.id] ?? [],
+        selectedSeatsReturn: gheDangChonTheoChuyen[ret.id] ?? [],
+        homeRestoreState: buildHomeRestoreState(trip.id),
+      },
+    });
+  };
+
+  const onSwitchResultTab = (tab: ResultTab) => {
+    setActiveResultTab(tab);
+    if (tab === 'outbound' && chuyenDiDaChon) {
+      setTripDangNoiBatId(chuyenDiDaChon.id);
+      return;
+    }
+    if (tab === 'return' && chuyenVeDaChon) {
+      setTripDangNoiBatId(chuyenVeDaChon.id);
+    }
+  };
+
   const norm = (value: string) =>
     value
       .toLowerCase()
       .normalize('NFD')
       .replace(/[\u0300-\u036f]/g, '');
 
+  const pickSeat = (apiSeats: SeatStatus[], idx: number): UiSeat => {
+    const s = apiSeats[idx];
+    if (!s) return { maGhe: '', daBan: true };
+    return { maGhe: s.maGhe, daBan: s.daBan };
+  };
+
+  const withHienThi = (ui: UiSeat, hienThiGhe: string): UiSeat => ({ ...ui, hienThiGhe });
+
   const buildSleeperLayout = (apiSeats: SeatStatus[]): SeatLayout => {
     const total = apiSeats.length;
     const lowerCount = Math.ceil(total / 2);
     const upperCount = total - lowerCount;
-    const toSeat = (idx: number, label: string): UiSeat => ({
-      maGhe: label,
-      daBan: apiSeats[idx]?.daBan ?? false,
-    });
-    const buildRows = (count: number, prefix: 'A' | 'B', startIdx: number) => {
+    const buildRows = (count: number, startIdx: number, prefix: 'A' | 'B') => {
       const rows: UiSeat[][] = [];
       if (count > 0) {
-        rows.push(Array.from({ length: Math.min(2, count) }, (_, i) => toSeat(startIdx + i, `${prefix}${String(i + 1).padStart(2, '0')}`)));
+        rows.push(
+          Array.from({ length: Math.min(2, count) }, (_, i) =>
+            withHienThi(pickSeat(apiSeats, startIdx + i), `${prefix}${String(i + 1).padStart(2, '0')}`),
+          ),
+        );
       }
       let used = rows[0]?.length ?? 0;
       while (used < count) {
         const rowSize = Math.min(3, count - used);
         rows.push(
           Array.from({ length: rowSize }, (_, i) =>
-            toSeat(startIdx + used + i, `${prefix}${String(used + i + 1).padStart(2, '0')}`)
-          )
+            withHienThi(pickSeat(apiSeats, startIdx + used + i), `${prefix}${String(used + i + 1).padStart(2, '0')}`),
+          ),
         );
         used += rowSize;
       }
       return rows;
     };
-    return { tangDuoi: buildRows(lowerCount, 'A', 0), tangTren: buildRows(upperCount, 'B', lowerCount) };
+    return { tangDuoi: buildRows(lowerCount, 0, 'A'), tangTren: buildRows(upperCount, lowerCount, 'B') };
   };
 
   const buildLimousineLayout = (apiSeats: SeatStatus[]): SeatLayout => {
     const total = apiSeats.length;
-    const toSeat = (idx: number): UiSeat => ({
-      maGhe: String(idx + 1).padStart(2, '0'),
-      daBan: apiSeats[idx]?.daBan ?? false,
-    });
+    const toSeat = (idx: number) => withHienThi(pickSeat(apiSeats, idx), String(idx + 1).padStart(2, '0'));
     const rows: UiSeat[][] = [];
     if (total >= 3 && total % 2 === 1) {
       const pairUntil = total - 3;
@@ -444,7 +716,7 @@ const HomePage = () => {
         .map((offset) => {
           const idx = base + offset;
           if (idx >= total) return null;
-          return { maGhe: String(idx + 1).padStart(2, '0'), daBan: apiSeats[idx]?.daBan ?? false };
+          return withHienThi(pickSeat(apiSeats, idx), String(idx + 1).padStart(2, '0'));
         })
         .filter((s): s is UiSeat => Boolean(s));
       rows.push(rowSeats);
@@ -457,6 +729,20 @@ const HomePage = () => {
     if (vt.includes('giuong')) return buildSleeperLayout(apiSeats);
     if (vt.includes('limousine') || vt.includes('limosine')) return buildLimousineLayout(apiSeats);
     return buildSeatBusLayout(apiSeats);
+  };
+
+  const gheHienThiTrenBang = (maGheList: string[], soDo: SeatMapResponse | null, loaiXe: string) => {
+    if (!maGheList.length) return '';
+    if (!soDo) return maGheList.join(', ');
+    const layout = getSeatLayoutByVehicleType(loaiXe, soDo.ghe);
+    const m = new Map<string, string>();
+    const visit = (rows?: UiSeat[][]) => {
+      rows?.forEach((row) => row.forEach((s) => s.maGhe && m.set(s.maGhe, s.hienThiGhe ?? s.maGhe)));
+    };
+    visit(layout.tangDuoi);
+    visit(layout.tangTren);
+    visit(layout.single);
+    return maGheList.map((c) => m.get(c) ?? c).join(', ');
   };
 
   const toggleTimeFilter = (key: TimeFilterKey) => {
@@ -503,9 +789,12 @@ const HomePage = () => {
     return kind.includes('giuong');
   };
 
-  const filteredTrips = danhSachChuyen.filter((trip) => {
-    return matchesTimeFilter(trip) && matchesVehicleFilter(trip) && matchesDeckFilter(trip);
-  });
+  const applyAllFilters = (trips: TripSummary[]) =>
+    trips.filter((trip) => matchesTimeFilter(trip) && matchesVehicleFilter(trip) && matchesDeckFilter(trip));
+
+  const filteredOutboundTrips = applyAllFilters(danhSachChuyen);
+  const filteredReturnTrips = applyAllFilters(danhSachChuyenVe);
+  const filteredTrips = activeResultTab === 'outbound' ? filteredOutboundTrips : filteredReturnTrips;
 
   return (
     <div className="bg-white">
@@ -524,11 +813,16 @@ const HomePage = () => {
               <input type="radio" name="tripType" checked={tripType === 'round-trip'} onChange={() => setTripType('round-trip')} className="form-radio" />
               <span>Khứ hồi</span>
             </label>
-            <div className="ml-auto text-sm text-[#ef5222] hover:underline cursor-pointer">Hướng dẫn mua vé</div>
+            <Link
+              to="/huong-dan-dat-ve"
+              className="ml-auto text-sm text-[#ef5222] hover:underline"
+            >
+              Hướng dẫn mua vé
+            </Link>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
-            <div>
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-end">
+              <div className="lg:flex-[1.8]">
               <label className="block text-sm font-semibold text-gray-700 mb-1">Điểm đi</label>
               <div className="relative">
                 <MapPin className="absolute left-3 top-3 w-5 h-5 text-gray-400" />
@@ -547,74 +841,85 @@ const HomePage = () => {
                   ))}
                 </datalist>
               </div>
-            </div>
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-1">Điểm đến</label>
-              <div className="relative">
-                <MapPin className="absolute left-3 top-3 w-5 h-5 text-gray-400" />
-                <input
-                  type="text"
-                  autoComplete="off"
-                  list={diemDen.trim() ? 'home-goi-y-diem-den' : undefined}
-                  placeholder="Đồng Tháp"
-                  value={diemDen}
-                  onChange={(e) => setDiemDen(e.target.value)}
-                  className="w-full pl-10 pr-3 py-3 border rounded-lg focus:outline-none focus:border-[#ef5222]"
-                />
-                <datalist id="home-goi-y-diem-den">
-                  {goiYDiemDen.map((item) => (
-                    <option key={item} value={item} />
-                  ))}
-                </datalist>
               </div>
-            </div>
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-1">Ngày đi</label>
-              <div className="relative">
-                <Calendar className="absolute left-3 top-3 w-5 h-5 text-gray-400" />
-                <input
-                  type="date"
-                  lang="vi-VN"
-                  value={ngayDi}
-                  min={new Date().toISOString().split('T')[0]}
-                  onChange={(e) => {
-                    const value = e.target.value;
-                    setNgayDi(value);
-                    if (ngayVe && value && ngayVe < value) setNgayVe(value);
-                  }}
-                  className="w-full pl-10 pr-3 py-3 border rounded-lg focus:outline-none focus:border-[#ef5222]"
-                />
+              <div className="flex justify-center lg:flex-none lg:pb-1">
+                <label className="sr-only">Đảo điểm đi và điểm đến</label>
+                <button
+                  type="button"
+                  onClick={onSwapPlaces}
+                  className="flex h-11 w-11 items-center justify-center rounded-full border border-gray-200 bg-white text-lg font-semibold text-gray-500 shadow-sm transition hover:border-[#ef5222]/40 hover:text-[#ef5222]"
+                  title="Đảo điểm đi và điểm đến"
+                >
+                  ⇌
+                </button>
               </div>
-            </div>
-            {tripType === 'round-trip' && (
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-1">Ngày về</label>
+              <div className="lg:flex-[1.8]">
+                <label className="block text-sm font-semibold text-gray-700 mb-1">Điểm đến</label>
+                <div className="relative">
+                  <MapPin className="absolute left-3 top-3 w-5 h-5 text-gray-400" />
+                  <input
+                    type="text"
+                    autoComplete="off"
+                    list={diemDen.trim() ? 'home-goi-y-diem-den' : undefined}
+                    placeholder="Đồng Tháp"
+                    value={diemDen}
+                    onChange={(e) => setDiemDen(e.target.value)}
+                    className="w-full pl-10 pr-3 py-3 border rounded-lg focus:outline-none focus:border-[#ef5222]"
+                  />
+                  <datalist id="home-goi-y-diem-den">
+                    {goiYDiemDen.map((item) => (
+                      <option key={item} value={item} />
+                    ))}
+                  </datalist>
+                </div>
+              </div>
+              <div className="lg:flex-[1.15]">
+                <label className="block text-sm font-semibold text-gray-700 mb-1">Ngày đi</label>
                 <div className="relative">
                   <Calendar className="absolute left-3 top-3 w-5 h-5 text-gray-400" />
                   <input
                     type="date"
                     lang="vi-VN"
-                    value={ngayVe}
-                    min={ngayDi || new Date().toISOString().split('T')[0]}
-                    onChange={(e) => setNgayVe(e.target.value)}
+                    value={ngayDi}
+                    min={new Date().toISOString().split('T')[0]}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      setNgayDi(value);
+                      if (ngayVe && value && ngayVe < value) setNgayVe(value);
+                    }}
                     className="w-full pl-10 pr-3 py-3 border rounded-lg focus:outline-none focus:border-[#ef5222]"
                   />
                 </div>
               </div>
-            )}
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-1">Số vé</label>
-              <div className="relative">
-                <Users className="absolute left-3 top-3 w-5 h-5 text-gray-400" />
-                <select value={soVe} onChange={(e) => setSoVe(e.target.value)} className="w-full pl-10 pr-3 py-3 border rounded-lg focus:outline-none focus:border-[#ef5222] appearance-none bg-white">
-                  <option>1</option>
-                  <option>2</option>
-                  <option>3</option>
-                  <option>4</option>
-                  <option>5</option>
-                </select>
+              {tripType === 'round-trip' && (
+                <div className="lg:flex-[1.15]">
+                  <label className="block text-sm font-semibold text-gray-700 mb-1">Ngày về</label>
+                  <div className="relative">
+                    <Calendar className="absolute left-3 top-3 w-5 h-5 text-gray-400" />
+                    <input
+                      type="date"
+                      lang="vi-VN"
+                      value={ngayVe}
+                      min={ngayDi || new Date().toISOString().split('T')[0]}
+                      onChange={(e) => setNgayVe(e.target.value)}
+                      className="w-full pl-10 pr-3 py-3 border rounded-lg focus:outline-none focus:border-[#ef5222]"
+                    />
+                  </div>
+                </div>
+              )}
+              <div className="lg:flex-[0.9]">
+                <label className="block text-sm font-semibold text-gray-700 mb-1">Số vé</label>
+                <div className="relative">
+                  <Users className="absolute left-3 top-3 w-5 h-5 text-gray-400" />
+                  <select value={soVe} onChange={(e) => setSoVe(e.target.value)} className="w-full pl-10 pr-3 py-3 border rounded-lg focus:outline-none focus:border-[#ef5222] appearance-none bg-white">
+                    <option>1</option>
+                    <option>2</option>
+                    <option>3</option>
+                    <option>4</option>
+                    <option>5</option>
+                  </select>
+                </div>
               </div>
-            </div>
           </div>
 
           <div className="flex justify-center mt-6">
@@ -629,46 +934,112 @@ const HomePage = () => {
         <div className="container mx-auto px-4 py-10 max-w-6xl">
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
             <div className="lg:col-span-4 space-y-4">
-              {selectedTripInfo && (
+              {(chuyenChonDauTien || chuyenDiDaChon || chuyenVeDaChon || selectedTripInfo) && (
                 <div className="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
                   <div className="px-4 py-3 border-b border-gray-100">
                     <h4 className="text-sm font-bold text-gray-800 uppercase">Chuyến đi của bạn</h4>
                   </div>
                   <div className="px-4 py-3">
-                    <div className="border-l-4 border-[#ef5222] pl-3">
-                      <div className="flex gap-3">
-                        <div className="w-8 h-8 rounded-md bg-[#ef5222] text-white text-sm font-bold flex items-center justify-center mt-0.5">
-                          1
-                        </div>
-                        <div>
-                          <p className="text-sm font-semibold text-gray-800">
-                            {formatWeekdayDate(selectedTripInfo.ngayDi)}
-                          </p>
-                          <p className="text-sm font-semibold text-gray-800">
-                            {selectedTripInfo.diemDi} - {selectedTripInfo.diemDen}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="mt-3 flex items-center justify-between">
-                        <p className="text-2xl font-semibold text-gray-900">{selectedTripInfo.gioDi?.slice(0, 5) || '--:--'}</p>
-                        <div className="text-center">
-                          <p className="text-sm font-semibold text-gray-500">
-                            {formatDuration(selectedTripInfo.thoiGianDuKienPhut)}
-                            {selectedTripInfo.khoangCach ? ` - ${selectedTripInfo.khoangCach}Km` : ''}
-                          </p>
-                        </div>
-                        <p className="text-2xl font-semibold text-gray-900">
-                          {(selectedTripInfo.gioDenDuKien || addMinutesToTime(selectedTripInfo.gioDi, selectedTripInfo.thoiGianDuKienPhut))?.slice(0, 5) || '--:--'}
-                        </p>
-                      </div>
-                      {(gheDangChonTheoChuyen[selectedTripInfo.id] ?? []).length > 0 && (
-                        <p className="mt-2 text-sm text-gray-600">
-                          Ghế:{' '}
-                          <span className="font-semibold">{(gheDangChonTheoChuyen[selectedTripInfo.id] ?? []).join(', ')}</span>
-                        </p>
-                      )}
-                    </div>
-                  </div>
+                    {(() => {
+                      const hasBothDirectional = Boolean(chuyenDiDaChon && chuyenVeDaChon);
+                      const hasSelectedSeatBoth =
+                        hasBothDirectional &&
+                        (gheDangChonTheoChuyen[chuyenDiDaChon!.id] ?? []).length > 0 &&
+                        (gheDangChonTheoChuyen[chuyenVeDaChon!.id] ?? []).length > 0;
+                      const hasOpenedSeatBoth =
+                        hasBothDirectional &&
+                        tripIdsDaMoChonGhe.includes(chuyenDiDaChon!.id) &&
+                        tripIdsDaMoChonGhe.includes(chuyenVeDaChon!.id);
+                      const showBoth = hasBothDirectional && (hasSelectedSeatBoth || hasOpenedSeatBoth);
+                      const tripOne = showBoth ? chuyenDiDaChon : chuyenChonDauTien;
+                      const tripTwo = showBoth ? chuyenVeDaChon : null;
+                      if (!tripOne && !selectedTripInfo) return null;
+                      const renderTripBlock = (trip: TripSummary, order: 1 | 2, withTopBorder = false) => {
+                        const highlightByTab =
+                          (activeResultTab === 'outbound' && chuyenDiDaChon?.id === trip.id) ||
+                          (activeResultTab === 'return' && chuyenVeDaChon?.id === trip.id);
+                        const isHighlighted = highlightByTab || tripDangNoiBatId === trip.id;
+                        const seats = gheDangChonTheoChuyen[trip.id] ?? [];
+                        const badgeBase = 'bg-[#9ca3af]';
+                        const badgeActiveFill = isHighlighted ? 'bg-[#ef5222]' : '';
+                        const badgeHighlight = isHighlighted
+                          ? 'ring-4 ring-[#ef5222]/25 scale-105 shadow-md'
+                          : '';
+                        return (
+                          <div
+                            role="button"
+                            tabIndex={0}
+                            onClick={() => {
+                              setTripDangNoiBatId(trip.id);
+                              if (chuyenDiDaChon && trip.id === chuyenDiDaChon.id) setActiveResultTab('outbound');
+                              if (chuyenVeDaChon && trip.id === chuyenVeDaChon.id) setActiveResultTab('return');
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key !== 'Enter' && e.key !== ' ') return;
+                              e.preventDefault();
+                              setTripDangNoiBatId(trip.id);
+                              if (chuyenDiDaChon && trip.id === chuyenDiDaChon.id) setActiveResultTab('outbound');
+                              if (chuyenVeDaChon && trip.id === chuyenVeDaChon.id) setActiveResultTab('return');
+                            }}
+                            className={`border-l-4 ${isHighlighted ? 'border-[#ef5222]' : 'border-transparent'} pl-3 ${withTopBorder ? 'pt-3 border-t border-gray-100' : 'pb-3'} ${isHighlighted ? 'bg-[#fff7f3] rounded-r-md' : ''}`}
+                          >
+                            <div className="flex gap-3">
+                              <div
+                                className={`w-8 h-8 rounded-md text-white text-sm font-bold flex items-center justify-center mt-0.5 transition ${badgeBase} ${badgeActiveFill} ${badgeHighlight}`}
+                              >
+                                {order}
+                              </div>
+                              <div>
+                                <p className="text-sm font-semibold text-gray-800">{formatWeekdayDate(trip.ngayDi)}</p>
+                                <p className="text-sm font-semibold text-gray-800">{trip.diemDi} - {trip.diemDen}</p>
+                              </div>
+                            </div>
+                            <div className="mt-3 flex items-center justify-between">
+                              <p className="text-2xl font-semibold text-gray-900">{trip.gioDi?.slice(0, 5) || '--:--'}</p>
+                              <div className="text-center">
+                                <p className="text-sm font-semibold text-gray-500">
+                                  {formatDuration(trip.thoiGianDuKienPhut)}
+                                  {trip.khoangCach ? ` - ${trip.khoangCach}Km` : ''}
+                                </p>
+                              </div>
+                              <p className="text-2xl font-semibold text-gray-900">
+                                {(trip.gioDenDuKien || addMinutesToTime(trip.gioDi, trip.thoiGianDuKienPhut))?.slice(0, 5) || '--:--'}
+                              </p>
+                            </div>
+                            <p className="mt-2 text-sm text-gray-600">
+                              Ghế:{' '}
+                              <span className="font-semibold">
+                                {seats.length
+                                  ? gheHienThiTrenBang(seats, soDoGheTheoChuyen[trip.id] ?? null, trip.loaiXe || '')
+                                  : 'Chưa chọn ghế'}
+                              </span>
+                            </p>
+                          </div>
+                        );
+                      };
+                      return (
+                        <>
+                          {tripOne && (
+                            renderTripBlock(tripOne, 1, false)
+                          )}
+                          {tripTwo && (
+                            renderTripBlock(tripTwo, 2, true)
+                          )}
+                          {!tripOne && selectedTripInfo && (
+                            <div className="border-l-4 border-[#ef5222] pl-3">
+                              <div className="flex gap-3">
+                                <div className="w-8 h-8 rounded-md bg-[#ef5222] text-white text-sm font-bold flex items-center justify-center mt-0.5">1</div>
+                                <div>
+                                  <p className="text-sm font-semibold text-gray-800">{formatWeekdayDate(selectedTripInfo.ngayDi)}</p>
+                                  <p className="text-sm font-semibold text-gray-800">{selectedTripInfo.diemDi} - {selectedTripInfo.diemDen}</p>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                        </>
+                      );
+                    })()}
+                </div>
                 </div>
               )}
 
@@ -731,11 +1102,44 @@ const HomePage = () => {
               </div>
             </div>
 
-            <div className="lg:col-span-8">
+            <div id="trip-results-root" className="lg:col-span-8">
               <div className="rounded-xl border border-gray-200 bg-white shadow-sm p-4">
                 <h3 className="text-2xl font-bold text-gray-800">
-                  {tieuChiDaTim?.diemDi || 'Điểm đi'} - {tieuChiDaTim?.diemDen || 'Điểm đến'} ({filteredTrips.length})
+                  {(activeResultTab === 'return' ? tieuChiDaTim?.diemDen : tieuChiDaTim?.diemDi) || 'Điểm đi'} - {(activeResultTab === 'return' ? tieuChiDaTim?.diemDi : tieuChiDaTim?.diemDen) || 'Điểm đến'} ({filteredTrips.length})
                 </h3>
+                {tieuChiDaTim?.tripType === 'round-trip' && (
+                  <div className="mt-3 overflow-hidden rounded-lg border border-gray-200">
+                    <div className="grid grid-cols-2 text-sm font-semibold">
+                      <button
+                        type="button"
+                        onClick={() => onSwitchResultTab('outbound')}
+                        className={`px-4 py-3 text-center transition ${
+                          activeResultTab === 'outbound'
+                            ? 'border-b-2 border-[#ef5222] bg-[#fff6f3] text-[#ef5222]'
+                            : 'bg-white text-gray-700 hover:bg-gray-50'
+                        }`}
+                      >
+                        CHUYẾN ĐI - {formatWeekdayDate(tieuChiDaTim.ngayDi || ngayDi)}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => onSwitchResultTab('return')}
+                        className={`px-4 py-3 text-center transition ${
+                          activeResultTab === 'return'
+                            ? 'border-b-2 border-[#ef5222] bg-[#fff6f3] text-[#ef5222]'
+                            : 'bg-white text-gray-700 hover:bg-gray-50'
+                        }`}
+                      >
+                        CHUYẾN VỀ - {formatWeekdayDate(tieuChiDaTim.ngayVe || ngayVe)}
+                      </button>
+                    </div>
+                  </div>
+                )}
+                {tieuChiDaTim?.tripType === 'round-trip' && chuyenDiDaChon && (
+                  <p className="mt-3 rounded-md bg-[#fff6f3] px-3 py-2 text-sm text-[#bf3f18]">
+                    Đã chọn chuyến đi: <span className="font-semibold">{chuyenDiDaChon.gioDi?.slice(0, 5)} - {chuyenDiDaChon.tenTuyen}</span>. Hãy chọn chuyến về để tiếp tục đặt vé.
+                  </p>
+                )}
                 {thongBaoTimKiem && <p className="text-sm text-gray-500 mt-4">{thongBaoTimKiem}</p>}
                 <div className="space-y-4 mt-4">
                   {filteredTrips.map((trip) => (
@@ -784,8 +1188,8 @@ const HomePage = () => {
                           <span className="text-gray-700">Trung chuyển</span>
                           <span className="text-gray-700">Chính sách</span>
                         </div>
-                        <button type="button" className="px-4 py-2 rounded-full text-sm font-semibold bg-[#ef5222] text-white hover:bg-[#d84a1e] transition">
-                          Chọn chuyến
+                        <button type="button" onClick={() => onChooseTrip(trip)} className="px-4 py-2 rounded-full text-sm font-semibold bg-[#ef5222] text-white hover:bg-[#d84a1e] transition">
+                          {tripType === 'round-trip' ? (activeResultTab === 'outbound' ? 'Chọn chuyến đi' : 'Chọn chuyến về') : 'Chọn chuyến'}
                         </button>
                       </div>
 
@@ -801,7 +1205,7 @@ const HomePage = () => {
                               </div>
                               {(() => {
                                 const layout = getSeatLayoutByVehicleType(trip.loaiXe || '', soDoGheTheoChuyen[trip.id].ghe);
-                                const renderSeatButton = (seat: SeatStatus, sizeClass = 'w-11 h-11 md:w-12 md:h-12') => {
+                                const renderSeatButton = (seat: SeatStatus & { hienThiGhe?: string }, sizeClass = 'w-11 h-11 md:w-12 md:h-12') => {
                                   const selected = (gheDangChonTheoChuyen[trip.id] ?? []).includes(seat.maGhe);
                                   const seatClass = seat.daBan
                                     ? 'bg-gray-200 text-gray-400 border-gray-300 cursor-not-allowed'
@@ -810,18 +1214,58 @@ const HomePage = () => {
                                       : 'bg-blue-50 text-blue-500 border-blue-300 cursor-pointer hover:bg-blue-100';
                                   return (
                                     <button key={seat.maGhe} type="button" onClick={() => onSelectSeat(trip.id, seat)} disabled={seat.daBan} className={`${sizeClass} text-[13px] font-bold rounded-lg border-2 leading-none transition ${seatClass}`}>
-                                      {seat.maGhe}
+                                      {seat.hienThiGhe ?? seat.maGhe}
                                     </button>
                                   );
                                 };
                                 return (
                                   <>
-                                    {layout.tangDuoi && (
+                                    {layout.tangDuoi && layout.tangTren && (
+                                      <div className="mb-4 grid grid-cols-1 gap-6 md:grid-cols-2">
+                                        <div>
+                                          <p className="text-sm font-semibold text-gray-700 mb-2 text-center">Tầng dưới</p>
+                                          <div className="space-y-3 max-w-md mx-auto">
+                                            {layout.tangDuoi.map((row, rowIdx) => (
+                                              <div key={`duoi-${rowIdx}`} className="grid grid-cols-3 gap-3 w-fit mx-auto">
+                                                {row.length === 2 ? (
+                                                  <>
+                                                    {renderSeatButton(row[0] as SeatStatus)}
+                                                    <div className="w-11 h-11 md:w-12 md:h-12" />
+                                                    {renderSeatButton(row[1] as SeatStatus)}
+                                                  </>
+                                                ) : (
+                                                  row.map((seat) => renderSeatButton(seat as SeatStatus))
+                                                )}
+                                              </div>
+                                            ))}
+                                          </div>
+                                        </div>
+                                        <div>
+                                          <p className="text-sm font-semibold text-gray-700 mb-2 text-center">Tầng trên</p>
+                                          <div className="space-y-3 max-w-md mx-auto">
+                                            {layout.tangTren.map((row, rowIdx) => (
+                                              <div key={`tren-${rowIdx}`} className="grid grid-cols-3 gap-3 w-fit mx-auto">
+                                                {row.length === 2 ? (
+                                                  <>
+                                                    {renderSeatButton(row[0] as SeatStatus)}
+                                                    <div className="w-11 h-11 md:w-12 md:h-12" />
+                                                    {renderSeatButton(row[1] as SeatStatus)}
+                                                  </>
+                                                ) : (
+                                                  row.map((seat) => renderSeatButton(seat as SeatStatus))
+                                                )}
+                                              </div>
+                                            ))}
+                                          </div>
+                                        </div>
+                                      </div>
+                                    )}
+                                    {layout.tangDuoi && !layout.tangTren && (
                                       <div className="mb-4">
                                         <p className="text-sm font-semibold text-gray-700 mb-2 text-center">Tầng dưới</p>
                                         <div className="space-y-3 max-w-md mx-auto">
                                           {layout.tangDuoi.map((row, rowIdx) => (
-                                            <div key={`duoi-${rowIdx}`} className="grid grid-cols-3 gap-3 w-fit mx-auto">
+                                            <div key={`duoi-only-${rowIdx}`} className="grid grid-cols-3 gap-3 w-fit mx-auto">
                                               {row.length === 2 ? (
                                                 <>
                                                   {renderSeatButton(row[0] as SeatStatus)}
@@ -836,12 +1280,12 @@ const HomePage = () => {
                                         </div>
                                       </div>
                                     )}
-                                    {layout.tangTren && (
+                                    {layout.tangTren && !layout.tangDuoi && (
                                       <div className="mb-4">
                                         <p className="text-sm font-semibold text-gray-700 mb-2 text-center">Tầng trên</p>
                                         <div className="space-y-3 max-w-md mx-auto">
                                           {layout.tangTren.map((row, rowIdx) => (
-                                            <div key={`tren-${rowIdx}`} className="grid grid-cols-3 gap-3 w-fit mx-auto">
+                                            <div key={`tren-only-${rowIdx}`} className="grid grid-cols-3 gap-3 w-fit mx-auto">
                                               {row.length === 2 ? (
                                                 <>
                                                   {renderSeatButton(row[0] as SeatStatus)}
@@ -896,14 +1340,22 @@ const HomePage = () => {
                                     <p className="text-sm text-gray-700">
                                       {(gheDangChonTheoChuyen[trip.id] ?? []).length} Vé
                                     </p>
-                                    <p className="text-sm font-semibold text-gray-700">{(gheDangChonTheoChuyen[trip.id] ?? []).join(', ')}</p>
+                                    <p className="text-sm font-semibold text-gray-700">
+                                      {gheHienThiTrenBang(
+                                        gheDangChonTheoChuyen[trip.id] ?? [],
+                                        soDoGheTheoChuyen[trip.id] ?? null,
+                                        trip.loaiXe || '',
+                                      )}
+                                    </p>
                                   </div>
                                   <div className="flex items-end gap-0.75">
                                     <div className="text-right">
                                       <p className="text-sm text-gray-500">Tổng tiền</p>
                                       <p className="text-lg font-bold text-[#ef5222]">{formatCurrency((gheDangChonTheoChuyen[trip.id] ?? []).length * Number(trip.giaVe || 0))}</p>
                                     </div>
-                                    <button type="button" className="px-6 py-2 rounded-full text-sm font-semibold bg-[#ef5222] text-white hover:bg-[#d84a1e] transition">Chọn</button>
+                                    <button type="button" onClick={() => onChooseTrip(trip)} className="px-6 py-2 rounded-full text-sm font-semibold bg-[#ef5222] text-white hover:bg-[#d84a1e] transition">
+                                      {tripType === 'round-trip' ? (activeResultTab === 'outbound' ? 'Chọn chuyến đi' : 'Chọn chuyến về') : 'Chọn'}
+                                    </button>
                                   </div>
                                 </div>
                               )}

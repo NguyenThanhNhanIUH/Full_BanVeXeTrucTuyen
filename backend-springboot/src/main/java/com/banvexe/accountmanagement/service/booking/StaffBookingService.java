@@ -14,7 +14,6 @@ import com.banvexe.accountmanagement.repository.UserAccountRepository;
 import com.banvexe.accountmanagement.repository.VeXeRepository;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Locale;
 import java.util.Set;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -81,11 +80,11 @@ public class StaffBookingService {
         if (req.maGheMoi() != null && !req.maGheMoi().isEmpty()) {
             ChuyenXe chuyen = ve.getChuyenXe();
             List<String> newSeats = req.maGheMoi().stream()
-                .map(s -> s.trim().toUpperCase(Locale.ROOT))
+                .map(s -> BookingCatalogService.normalizeSeatCode(chuyen, s))
+                .filter(s -> s != null && !s.isBlank())
                 .distinct()
                 .toList();
-            int cap = BookingCatalogService.safeTongGhe(chuyen);
-            Set<String> allowed = new HashSet<>(BookingCatalogService.generateSeatLabels(Math.max(0, cap)));
+            Set<String> allowed = new HashSet<>(BookingCatalogService.generateSeatLabels(chuyen));
             for (String s : newSeats) {
                 if (!allowed.contains(s)) {
                     throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Mã ghế không hợp lệ: " + s);

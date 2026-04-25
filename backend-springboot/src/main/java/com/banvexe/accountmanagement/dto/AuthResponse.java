@@ -4,6 +4,8 @@ public record AuthResponse(
     String accessToken,
     String tokenType,
     String email,
-    String role
+    String role,
+    String fullName,
+    String phone
 ) {
 }

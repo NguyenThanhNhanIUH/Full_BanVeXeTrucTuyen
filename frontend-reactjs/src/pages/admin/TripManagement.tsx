@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Bus, Plus, Pencil, Trash2, X, Save, RefreshCw, BusFront, Timer, Play, Flag, OctagonX } from 'lucide-react';
+import AdminListPagination, { ADMIN_PAGE_SIZE } from '../../components/admin/AdminListPagination';
+import { Bus, Plus, Pencil, Trash2, X, Save, RefreshCw, BusFront, Timer, Play, Flag, OctagonX, Search } from 'lucide-react';
 import { api } from '../../api/client';
 import AdminPageStats from '../../components/admin/AdminPageStats';
 
@@ -57,6 +58,8 @@ const TripManagement: React.FC = () => {
   });
   const [saving, setSaving] = useState(false);
   const [loadErr, setLoadErr] = useState<string | null>(null);
+  const [tripSearch, setTripSearch] = useState('');
+  const [tablePage, setTablePage] = useState(0);
 
   const loadAll = async () => {
     setLoading(true);
@@ -138,6 +141,47 @@ const TripManagement: React.FC = () => {
     }
     return { total: trips.length, ...c };
   }, [trips]);
+
+  const displayTrips = useMemo(() => {
+    const q = tripSearch.trim().toLowerCase();
+    const sorted = [...trips].sort((a, b) => a.id - b.id);
+    if (!q) return sorted;
+    return sorted.filter((t) => {
+      const hay = [
+        String(t.id),
+        t.tenTuyen,
+        t.diemDi,
+        t.diemDen,
+        t.ngayDi,
+        formatTimeForInput(t.gioDi),
+        t.bienSo,
+        t.loaiXe,
+        String(t.giaVe),
+        String(t.tuyenXeId),
+        String(t.xeId),
+        t.trangThaiChuyen,
+      ]
+        .join(' ')
+        .toLowerCase();
+      return hay.includes(q);
+    });
+  }, [trips, tripSearch]);
+
+  useEffect(() => {
+    setTablePage(0);
+  }, [tripSearch]);
+
+  const tripTotalPages = displayTrips.length === 0 ? 0 : Math.max(1, Math.ceil(displayTrips.length / ADMIN_PAGE_SIZE));
+
+  useEffect(() => {
+    const maxP = Math.max(0, tripTotalPages - 1);
+    if (tablePage > maxP) setTablePage(maxP);
+  }, [tripTotalPages, tablePage]);
+
+  const pageRows = useMemo(() => {
+    const start = tablePage * ADMIN_PAGE_SIZE;
+    return displayTrips.slice(start, start + ADMIN_PAGE_SIZE);
+  }, [displayTrips, tablePage]);
 
   const openAdd = () => {
     setEditingId(null);
@@ -285,7 +329,7 @@ const TripManagement: React.FC = () => {
           { label: 'Hủy chuyến', value: tripStats.HUY_CHUYEN, icon: <OctagonX size={22} />, color: 'text-rose-600', bg: 'bg-rose-50', border: 'border-rose-200' },
         ]}
       />
-      <p className="text-xs text-gray-500 -mt-2 mb-2">Danh sách bên dưới gồm mọi chuyến; cột trạng thái tương ứng từng bản ghi.</p>
+      <p className="text-xs text-gray-500 -mt-2 mb-2">Danh sách sắp xếp theo ID; ô tìm kiếm lọc theo ID, tuyến, ngày giờ, biển số, trạng thái…</p>
 
       {loadErr && (
         <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
@@ -299,6 +343,21 @@ const TripManagement: React.FC = () => {
       )}
 
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+        <div className="flex flex-col gap-2 border-b border-gray-100 bg-gray-50/60 px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-xs text-gray-600">
+            Khớp lọc: <span className="font-semibold text-gray-800">{displayTrips.length}</span> / {trips.length} chuyến (mỗi trang {ADMIN_PAGE_SIZE})
+          </p>
+          <div className="relative w-full sm:max-w-sm">
+            <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+            <input
+              type="search"
+              value={tripSearch}
+              onChange={(e) => setTripSearch(e.target.value)}
+              placeholder="Tìm ID, tuyến, ngày, biển số, trạng thái…"
+              className="w-full rounded-lg border border-gray-200 bg-white py-2 pl-9 pr-3 text-sm outline-none focus:border-[#ef5222] focus:ring-1 focus:ring-[#ef5222]/20"
+            />
+          </div>
+        </div>
         <div className="overflow-x-auto">
           <table className="min-w-full text-sm">
             <thead className="bg-gray-50 border-b border-gray-200 text-left text-gray-600">
@@ -326,8 +385,14 @@ const TripManagement: React.FC = () => {
                     {loadErr ? '—' : 'Chưa có chuyến nào. Nếu CSDL mới, import database/data.sql hoặc tạo chuyến từ form (ngày giờ phải trong tương lai).'}
                   </td>
                 </tr>
+              ) : displayTrips.length === 0 ? (
+                <tr>
+                  <td colSpan={8} className="px-4 py-8 text-center text-gray-500">
+                    Không có chuyến khớp từ khóa &quot;{tripSearch}&quot;. Xóa ô tìm kiếm để xem lại toàn bộ.
+                  </td>
+                </tr>
               ) : (
-                trips.map((t) => (
+                pageRows.map((t) => (
                   <tr key={t.id} className="border-t border-gray-100 hover:bg-gray-50/80">
                     <td className="px-3 py-3 text-gray-600">{t.id}</td>
                     <td className="px-3 py-3">
@@ -379,6 +444,7 @@ const TripManagement: React.FC = () => {
             </tbody>
           </table>
         </div>
+        <AdminListPagination page={tablePage} total={displayTrips.length} onPageChange={setTablePage} />
       </div>
 
       {modal && (

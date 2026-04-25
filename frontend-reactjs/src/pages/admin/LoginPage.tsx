@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { LogIn, Lock, Mail, ArrowLeft } from 'lucide-react';
 import axios from 'axios';
 import { setAuth } from '../../auth/storage';
@@ -198,13 +198,15 @@ const LoginPage: React.FC = () => {
         tokenType: string;
         email: string;
         role: string;
+        fullName?: string;
+        phone?: string;
       }>('/api/auth/login', { email, password });
-      const { role, accessToken: token, email: mail } = data;
+      const { role, accessToken: token, email: mail, fullName: returnedName, phone: returnedPhone } = data;
       if (!token) {
         setErr('Phản hồi đăng nhập không hợp lệ.');
         return;
       }
-      setAuth(token, mail || email, role, mail || email);
+      setAuth(token, mail || email, role, returnedName || mail || email, returnedPhone);
       if (role === 'QUAN_TRI') {
         navigate('/admin', { replace: true });
       } else {
@@ -232,9 +234,21 @@ const LoginPage: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-[#f6f6f6]">
-      <div className="h-36 bg-gradient-to-r from-[#ff8d1a] via-[#ff6c12] to-[#ef5222]" />
+      <div className="relative">
+        <div className="relative z-0 flex min-h-[9rem] items-start justify-center bg-gradient-to-r from-[#ff8d1a] via-[#ff6c12] to-[#ef5222] pt-5 pb-20 md:min-h-[10rem] md:pt-6 md:pb-24">
+          <Link
+            to="/"
+            className="inline-flex items-center gap-3 rounded-full bg-white px-6 py-3 shadow-md transition hover:bg-gray-50 hover:shadow-lg"
+          >
+            <img src={logoImage} alt="Vina Go" className="h-12 w-auto object-contain md:h-14" />
+            <span className="text-2xl font-extrabold tracking-tight leading-none md:text-3xl">
+              <span className="text-[#0e5a32]">Vina</span>
+              <span className="text-[#e32222]">Go</span>
+            </span>
+          </Link>
+        </div>
 
-      <div className="-mt-16 px-4 pb-10">
+        <div className="relative z-10 -mt-12 px-4 pb-10 md:-mt-14">
         <div className="mx-auto w-full max-w-4xl rounded-2xl border border-[#f2d2c8] bg-white shadow-lg overflow-hidden">
           <div className="grid grid-cols-1 md:grid-cols-2">
             <div className="p-8 md:p-10 bg-[#fffdfc]">
@@ -561,6 +575,7 @@ const LoginPage: React.FC = () => {
               )}
             </div>
           </div>
+        </div>
         </div>
       </div>
     </div>

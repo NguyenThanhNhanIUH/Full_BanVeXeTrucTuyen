@@ -71,7 +71,11 @@ public class CustomerTicketService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Chuyến đã khởi hành hoặc hết hạn đặt");
         }
 
-        List<String> seats = req.maGhe().stream().map(s -> s.trim().toUpperCase(Locale.ROOT)).distinct().toList();
+        List<String> seats = req.maGhe().stream()
+            .map(s -> BookingCatalogService.normalizeSeatCode(chuyen, s))
+            .filter(s -> s != null && !s.isBlank())
+            .distinct()
+            .toList();
         if (seats.isEmpty()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Chọn ít nhất một ghế");
         }
@@ -83,7 +87,7 @@ public class CustomerTicketService {
                 "Chuyến hoặc xe thiếu số ghế; không thể đặt vé."
             );
         }
-        Set<String> allowed = new HashSet<>(BookingCatalogService.generateSeatLabels(cap));
+        Set<String> allowed = new HashSet<>(BookingCatalogService.generateSeatLabels(chuyen));
         for (String s : seats) {
             if (!allowed.contains(s)) {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Mã ghế không hợp lệ: " + s);

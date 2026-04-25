@@ -17,7 +17,9 @@ api.interceptors.response.use(
     const st = err.response?.status;
     if (st === 401 || st === 403) {
       clearAuth();
-      if (typeof window !== 'undefined' && window.location.pathname !== '/') {
+      const currentPath = typeof window !== 'undefined' ? window.location.pathname : '';
+      const shouldStayOnLookupPage = currentPath === '/tra-cuu-ve';
+      if (typeof window !== 'undefined' && currentPath !== '/' && !shouldStayOnLookupPage) {
         window.location.replace('/');
       }
     }

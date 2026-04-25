@@ -9,6 +9,7 @@ import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -23,6 +24,12 @@ public class CustomerAccountController {
 
     public CustomerAccountController(AccountProfileService accountProfileService) {
         this.accountProfileService = accountProfileService;
+    }
+
+    @GetMapping("/profile")
+    public ResponseEntity<ApiResponse<CustomerProfileResponse>> getProfile(Authentication authentication) {
+        CustomerProfileResponse data = accountProfileService.getProfile(authentication.getName());
+        return ResponseEntity.ok(ApiResponse.success(data));
     }
 
     @PutMapping("/profile")

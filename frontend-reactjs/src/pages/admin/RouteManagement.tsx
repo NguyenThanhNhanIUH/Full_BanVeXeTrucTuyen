@@ -1,7 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { MapPin, Plus, Pencil, Trash2, X, Save, RefreshCw, Layers, CheckCircle, Ban } from 'lucide-react';
+import { MapPin, Plus, Pencil, Trash2, X, Save, RefreshCw, Layers, CheckCircle, Ban, Search } from 'lucide-react';
 import { api } from '../../api/client';
 import AdminPageStats from '../../components/admin/AdminPageStats';
+import AdminListPagination, { ADMIN_PAGE_SIZE } from '../../components/admin/AdminListPagination';
 
 type RouteRow = {
   id: number;
@@ -31,6 +32,8 @@ const RouteManagement: React.FC = () => {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
+  const [routeSearch, setRouteSearch] = useState('');
+  const [tablePage, setTablePage] = useState(0);
 
   const load = async () => {
     setLoading(true);
@@ -141,6 +144,43 @@ const RouteManagement: React.FC = () => {
     return { total: list.length, active, inactive };
   }, [list]);
 
+  const displayRoutes = useMemo(() => {
+    const q = routeSearch.trim().toLowerCase();
+    const sorted = [...list].sort((a, b) => a.id - b.id);
+    if (!q) return sorted;
+    return sorted.filter((r) => {
+      const hay = [
+        String(r.id),
+        r.tenTuyen,
+        r.diemDi,
+        r.diemDen,
+        r.trangThai,
+        r.khoangCach != null ? String(r.khoangCach) : '',
+        r.thoiGianDuKienPhut != null ? String(r.thoiGianDuKienPhut) : '',
+        String(r.giaVeCoBan),
+      ]
+        .join(' ')
+        .toLowerCase();
+      return hay.includes(q);
+    });
+  }, [list, routeSearch]);
+
+  useEffect(() => {
+    setTablePage(0);
+  }, [routeSearch]);
+
+  const routeTotalPages = displayRoutes.length === 0 ? 0 : Math.max(1, Math.ceil(displayRoutes.length / ADMIN_PAGE_SIZE));
+
+  useEffect(() => {
+    const maxP = Math.max(0, routeTotalPages - 1);
+    if (tablePage > maxP) setTablePage(maxP);
+  }, [routeTotalPages, tablePage]);
+
+  const pageRows = useMemo(() => {
+    const start = tablePage * ADMIN_PAGE_SIZE;
+    return displayRoutes.slice(start, start + ADMIN_PAGE_SIZE);
+  }, [displayRoutes, tablePage]);
+
   return (
     <div className="flex flex-col gap-5 animate-fade-in">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -177,9 +217,24 @@ const RouteManagement: React.FC = () => {
         ]}
         gridClassName="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-2"
       />
-      <p className="text-xs text-gray-500 -mt-2 mb-2">Bảng dưới liệt kê tất cả tuyến; trạng thái cột &quot;Trạng thái&quot; phản ánh ACTIVE/INACTIVE.</p>
+      <p className="text-xs text-gray-500 -mt-2 mb-2">Bảng sắp xếp theo ID; ô tìm kiếm lọc theo ID, tên tuyến, điểm đi/đến, trạng thái…</p>
 
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+        <div className="flex flex-col gap-2 border-b border-gray-100 bg-gray-50/60 px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-xs text-gray-600">
+            Khớp lọc: <span className="font-semibold text-gray-800">{displayRoutes.length}</span> / {list.length} tuyến (mỗi trang {ADMIN_PAGE_SIZE})
+          </p>
+          <div className="relative w-full sm:max-w-sm">
+            <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+            <input
+              type="search"
+              value={routeSearch}
+              onChange={(e) => setRouteSearch(e.target.value)}
+              placeholder="Tìm ID, tên tuyến, điểm đi/đến, trạng thái…"
+              className="w-full rounded-lg border border-gray-200 bg-white py-2 pl-9 pr-3 text-sm outline-none focus:border-[#ef5222] focus:ring-1 focus:ring-[#ef5222]/20"
+            />
+          </div>
+        </div>
         <div className="overflow-x-auto">
           <table className="min-w-full text-sm">
             <thead className="bg-gray-50 border-b border-gray-200 text-left text-gray-600">
@@ -208,8 +263,14 @@ const RouteManagement: React.FC = () => {
                     Chưa có tuyến nào. Kiểm tra CSDL hoặc thêm tuyến mới.
                   </td>
                 </tr>
+              ) : displayRoutes.length === 0 ? (
+                <tr>
+                  <td colSpan={9} className="px-4 py-8 text-center text-gray-500">
+                    Không có tuyến khớp &quot;{routeSearch}&quot;.
+                  </td>
+                </tr>
               ) : (
-                list.map((r) => (
+                pageRows.map((r) => (
                   <tr key={r.id} className="border-t border-gray-100 hover:bg-gray-50/80">
                     <td className="px-3 py-3 text-gray-600">{r.id}</td>
                     <td className="px-3 py-3 font-medium text-gray-900">{r.tenTuyen}</td>
@@ -255,6 +316,7 @@ const RouteManagement: React.FC = () => {
             </tbody>
           </table>
         </div>
+        <AdminListPagination page={tablePage} total={displayRoutes.length} onPageChange={setTablePage} />
       </div>
 
       {modal && (

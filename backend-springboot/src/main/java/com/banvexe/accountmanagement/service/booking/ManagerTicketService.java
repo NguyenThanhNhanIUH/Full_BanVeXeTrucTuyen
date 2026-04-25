@@ -21,7 +21,6 @@ import com.banvexe.accountmanagement.repository.VeXeRepository;
 import java.math.BigDecimal;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Locale;
 import java.util.Set;
 import java.util.stream.Collectors;
 import org.hibernate.Hibernate;
@@ -138,7 +137,8 @@ public class ManagerTicketService {
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Không tìm thấy chuyến"));
 
         List<String> newSeats = req.maGhe().stream()
-            .map(s -> s.trim().toUpperCase(Locale.ROOT))
+            .map(s -> BookingCatalogService.normalizeSeatCode(chuyen, s))
+            .filter(s -> s != null && !s.isBlank())
             .distinct()
             .collect(Collectors.toList());
         if (newSeats.isEmpty()) {
@@ -152,7 +152,7 @@ public class ManagerTicketService {
                 "Chuyến / xe thiếu số ghế, không thể gán ghế cho vé."
             );
         }
-        Set<String> allowed = new HashSet<>(BookingCatalogService.generateSeatLabels(Math.max(0, cap)));
+        Set<String> allowed = new HashSet<>(BookingCatalogService.generateSeatLabels(chuyen));
         for (String s : newSeats) {
             if (!allowed.contains(s)) {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Mã ghế không hợp lệ: " + s);

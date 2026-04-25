@@ -1,7 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Truck, Plus, Pencil, Trash2, X, Save, RefreshCw, Armchair, BarChart2 } from 'lucide-react';
+import { Truck, Plus, Pencil, Trash2, X, Save, RefreshCw, Armchair, BarChart2, Search } from 'lucide-react';
 import { api } from '../../api/client';
 import AdminPageStats from '../../components/admin/AdminPageStats';
+import AdminListPagination, { ADMIN_PAGE_SIZE } from '../../components/admin/AdminListPagination';
 
 type VehicleRow = {
   id: number;
@@ -24,6 +25,8 @@ const VehicleManagement: React.FC = () => {
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
   const [loadErr, setLoadErr] = useState<string | null>(null);
+  const [vehicleSearch, setVehicleSearch] = useState('');
+  const [tablePage, setTablePage] = useState(0);
 
   const load = async () => {
     setLoading(true);
@@ -54,6 +57,32 @@ const VehicleManagement: React.FC = () => {
     const avg = n > 0 ? Math.round((sumGhe / n) * 10) / 10 : 0;
     return { total: n, sumGhe, avg };
   }, [list]);
+
+  const displayVehicles = useMemo(() => {
+    const q = vehicleSearch.trim().toLowerCase();
+    const sorted = [...list].sort((a, b) => a.id - b.id);
+    if (!q) return sorted;
+    return sorted.filter((v) => {
+      const hay = [String(v.id), v.bienSo, v.loaiXe, String(v.soGhe)].join(' ').toLowerCase();
+      return hay.includes(q);
+    });
+  }, [list, vehicleSearch]);
+
+  useEffect(() => {
+    setTablePage(0);
+  }, [vehicleSearch]);
+
+  const vehTotalPages = displayVehicles.length === 0 ? 0 : Math.max(1, Math.ceil(displayVehicles.length / ADMIN_PAGE_SIZE));
+
+  useEffect(() => {
+    const maxP = Math.max(0, vehTotalPages - 1);
+    if (tablePage > maxP) setTablePage(maxP);
+  }, [vehTotalPages, tablePage]);
+
+  const pageRows = useMemo(() => {
+    const start = tablePage * ADMIN_PAGE_SIZE;
+    return displayVehicles.slice(start, start + ADMIN_PAGE_SIZE);
+  }, [displayVehicles, tablePage]);
 
   const openAdd = () => {
     setEditingId(null);
@@ -153,7 +182,7 @@ const VehicleManagement: React.FC = () => {
           { label: 'Trung bình ghế / xe', value: vehStats.avg, icon: <BarChart2 size={22} />, color: 'text-cyan-600', bg: 'bg-cyan-50', border: 'border-cyan-200' },
         ]}
       />
-      <p className="text-xs text-gray-500 -mt-2 mb-2">Bảng dưới liệt kê tất cả bản ghi bảng Xe; không phân trạng thái kích hoạt (chỉ có khi tuyến / chuyến).</p>
+      <p className="text-xs text-gray-500 -mt-2 mb-2">Bảng sắp xếp theo ID; tìm theo ID, biển số, loại xe, số ghế.</p>
 
       {loadErr && (
         <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
@@ -163,6 +192,21 @@ const VehicleManagement: React.FC = () => {
       )}
 
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+        <div className="flex flex-col gap-2 border-b border-gray-100 bg-gray-50/60 px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-xs text-gray-600">
+            Khớp lọc: <span className="font-semibold text-gray-800">{displayVehicles.length}</span> / {list.length} xe (mỗi trang {ADMIN_PAGE_SIZE})
+          </p>
+          <div className="relative w-full sm:max-w-sm">
+            <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+            <input
+              type="search"
+              value={vehicleSearch}
+              onChange={(e) => setVehicleSearch(e.target.value)}
+              placeholder="Tìm ID, biển số, loại xe…"
+              className="w-full rounded-lg border border-gray-200 bg-white py-2 pl-9 pr-3 text-sm outline-none focus:border-[#ef5222] focus:ring-1 focus:ring-[#ef5222]/20"
+            />
+          </div>
+        </div>
         <div className="overflow-x-auto">
           <table className="min-w-full text-sm">
             <thead className="bg-gray-50 border-b border-gray-200 text-left text-gray-600">
@@ -189,8 +233,14 @@ const VehicleManagement: React.FC = () => {
                       : 'Chưa có xe nào. Thêm xe hoặc import dữ liệu mẫu vào CSDL.'}
                   </td>
                 </tr>
+              ) : displayVehicles.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="px-4 py-8 text-center text-gray-500">
+                    Không có xe khớp &quot;{vehicleSearch}&quot;.
+                  </td>
+                </tr>
               ) : (
-                list.map((v) => (
+                pageRows.map((v) => (
                   <tr key={v.id} className="border-t border-gray-100 hover:bg-gray-50/80">
                     <td className="px-4 py-3 text-gray-600">{v.id}</td>
                     <td className="px-4 py-3 font-mono font-medium text-gray-900">{v.bienSo}</td>
@@ -222,6 +272,7 @@ const VehicleManagement: React.FC = () => {
             </tbody>
           </table>
         </div>
+        <AdminListPagination page={tablePage} total={displayVehicles.length} onPageChange={setTablePage} />
       </div>
 
       {modal && (

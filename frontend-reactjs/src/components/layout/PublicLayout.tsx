@@ -1,11 +1,14 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { User, Phone, Mail, MapPin, Menu, X } from 'lucide-react';
+import { User, Phone, Mail, MapPin, Menu, X, UserCircle2, History, KeyRound, LogOut, ChevronDown } from 'lucide-react';
 import { clearAuth, getStoredEmail, getStoredName, getStoredRole } from '../../auth/storage';
 import logoImage from '../../assets/logo.png';
 
 const PublicLayout = () => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
+  const profileMenuRef = useRef<HTMLDivElement | null>(null);
+  const closeMenuTimerRef = useRef<number | null>(null);
   const location = useLocation();
   const navigate = useNavigate();
   const userRole = getStoredRole();
@@ -22,7 +25,49 @@ const PublicLayout = () => {
   const onLogout = () => {
     clearAuth();
     setIsMobileMenuOpen(false);
+    setIsProfileMenuOpen(false);
     navigate('/', { replace: true });
+  };
+
+  useEffect(() => {
+    setIsProfileMenuOpen(false);
+  }, [location.pathname]);
+
+  useEffect(() => {
+    const onDocClick = (event: MouseEvent) => {
+      if (!profileMenuRef.current) return;
+      if (!profileMenuRef.current.contains(event.target as Node)) {
+        setIsProfileMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', onDocClick);
+    return () => document.removeEventListener('mousedown', onDocClick);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (closeMenuTimerRef.current) {
+        window.clearTimeout(closeMenuTimerRef.current);
+      }
+    };
+  }, []);
+
+  const openProfileMenu = () => {
+    if (closeMenuTimerRef.current) {
+      window.clearTimeout(closeMenuTimerRef.current);
+      closeMenuTimerRef.current = null;
+    }
+    setIsProfileMenuOpen(true);
+  };
+
+  const scheduleCloseProfileMenu = () => {
+    if (closeMenuTimerRef.current) {
+      window.clearTimeout(closeMenuTimerRef.current);
+    }
+    closeMenuTimerRef.current = window.setTimeout(() => {
+      setIsProfileMenuOpen(false);
+      closeMenuTimerRef.current = null;
+    }, 260);
   };
 
   const navLinks = [
@@ -48,7 +93,6 @@ const PublicLayout = () => {
               </Link>
             </div>
 
-            {/* Desktop Navigation */}
             <nav className="hidden md:flex space-x-6 items-center">
               {navLinks.map((link) => (
                 <Link
@@ -72,18 +116,56 @@ const PublicLayout = () => {
                       Dashboard Admin
                     </Link>
                   ) : (
-                    <div className="flex items-center bg-white text-[#ef5222] px-4 py-2 rounded-full text-sm font-semibold max-w-[180px] truncate">
-                      <User className="w-4 h-4 mr-2" />
-                      {shortText(userName)}
+                    <div
+                      ref={profileMenuRef}
+                      className="relative"
+                      onMouseEnter={openProfileMenu}
+                      onMouseLeave={scheduleCloseProfileMenu}
+                    >
+                      <button
+                        type="button"
+                        onClick={openProfileMenu}
+                        className="flex items-center gap-2 bg-white text-[#ef5222] px-4 py-2 rounded-full text-sm font-semibold hover:bg-gray-100 transition max-w-[220px]"
+                      >
+                        <User className="w-4 h-4 shrink-0" />
+                        <span className="truncate">{shortText(userName, 18)}</span>
+                        <ChevronDown className="w-4 h-4 shrink-0" />
+                      </button>
+                      {isProfileMenuOpen && (
+                        <div className="absolute right-0 mt-2 w-64 overflow-hidden rounded-md bg-white py-2 shadow-xl ring-1 ring-black/10 z-50">
+                          <Link to="/tai-khoan/thong-tin" className="flex items-center gap-3 px-4 py-3 text-sm text-gray-700 hover:bg-gray-50">
+                            <UserCircle2 className="w-5 h-5 text-[#e6a319]" />
+                            Thông tin tài khoản
+                          </Link>
+                          <Link to="/tai-khoan/lich-su-mua-ve" className="flex items-center gap-3 px-4 py-3 text-sm text-gray-700 hover:bg-gray-50">
+                            <History className="w-5 h-5 text-[#60a5fa]" />
+                            Lịch sử mua vé
+                          </Link>
+                          <Link to="/tai-khoan/dat-lai-mat-khau" className="flex items-center gap-3 px-4 py-3 text-sm text-gray-700 hover:bg-gray-50">
+                            <KeyRound className="w-5 h-5 text-[#f97316]" />
+                            Đặt lại mật khẩu
+                          </Link>
+                          <button
+                            type="button"
+                            onClick={onLogout}
+                            className="flex w-full items-center gap-3 px-4 py-3 text-left text-sm text-gray-700 hover:bg-gray-50"
+                          >
+                            <LogOut className="w-5 h-5 text-[#ef4444]" />
+                            Đăng xuất
+                          </button>
+                        </div>
+                      )}
                     </div>
                   )}
-                  <button
-                    type="button"
-                    onClick={onLogout}
-                    className="flex items-center bg-white/10 border border-white/30 text-white px-3 py-2 rounded-full text-sm font-semibold hover:bg-white/20 transition"
-                  >
-                    Đăng xuất
-                  </button>
+                  {isAdmin && (
+                    <button
+                      type="button"
+                      onClick={onLogout}
+                      className="flex items-center bg-white/10 border border-white/30 text-white px-3 py-2 rounded-full text-sm font-semibold hover:bg-white/20 transition"
+                    >
+                      Đăng xuất
+                    </button>
+                  )}
                 </div>
               ) : (
                 <Link to="/login" className="flex items-center bg-white text-[#ef5222] px-4 py-2 rounded-full text-sm font-semibold hover:bg-gray-100 transition">
@@ -123,14 +205,23 @@ const PublicLayout = () => {
                      Đăng nhập/Đăng ký
                    </Link>
                 ) : (
-                  <button
-                    type="button"
-                    onClick={onLogout}
-                    className="flex items-center bg-white text-[#ef5222] px-4 py-2 rounded text-sm font-semibold w-max mt-2"
-                  >
-                    <X className="w-4 h-4 mr-2" />
-                    Đăng xuất
-                  </button>
+                  <>
+                    {!isAdmin && (
+                      <>
+                        <Link to="/tai-khoan/thong-tin" className="text-sm font-semibold hover:bg-[#d84a1e] px-2 py-2 rounded" onClick={() => setIsMobileMenuOpen(false)}>Thông tin tài khoản</Link>
+                        <Link to="/tai-khoan/lich-su-mua-ve" className="text-sm font-semibold hover:bg-[#d84a1e] px-2 py-2 rounded" onClick={() => setIsMobileMenuOpen(false)}>Lịch sử mua vé</Link>
+                        <Link to="/tai-khoan/dat-lai-mat-khau" className="text-sm font-semibold hover:bg-[#d84a1e] px-2 py-2 rounded" onClick={() => setIsMobileMenuOpen(false)}>Đặt lại mật khẩu</Link>
+                      </>
+                    )}
+                    <button
+                      type="button"
+                      onClick={onLogout}
+                      className="flex items-center bg-white text-[#ef5222] px-4 py-2 rounded text-sm font-semibold w-max mt-2"
+                    >
+                      <X className="w-4 h-4 mr-2" />
+                      Đăng xuất
+                    </button>
+                  </>
                 )}
               </div>
             </div>
@@ -163,6 +254,7 @@ const PublicLayout = () => {
           <div>
             <h3 className="font-bold text-xl mb-4">Hỗ trợ</h3>
             <ul className="space-y-2">
+              <li><Link to="/huong-dan-dat-ve" className="hover:text-[#ef5222]">Hướng dẫn đặt vé trên web</Link></li>
               <li><Link to="/tra-cuu-ve" className="hover:text-[#ef5222]">Tra cứu thông tin đặt vé</Link></li>
               <li><Link to="/dieu-khoan" className="hover:text-[#ef5222]">Điều khoản sử dụng</Link></li>
               <li><Link to="/cau-hoi" className="hover:text-[#ef5222]">Câu hỏi thường gặp</Link></li>
