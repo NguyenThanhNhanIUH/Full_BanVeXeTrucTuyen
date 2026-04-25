@@ -26,7 +26,6 @@ function toNum(v: unknown): number {
   return 0;
 }
 
-// Định nghĩa kiểu dữ liệu cho một tài khoản trong hệ thống
 interface Account {
   id: number;
   email: string;
@@ -37,13 +36,11 @@ interface Account {
 }
 
 const AccountManagement: React.FC = () => {
-  // Các state quản lý danh sách hiển thị, trạng thái loading, ô tìm kiếm và tab hiện tại
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [activeTab, setActiveTab] = useState<'CUSTOMER' | 'STAFF'>('CUSTOMER');
 
-  // Các state quản lý hộp thoại (Modal) thêm/chỉnh sửa tài khoản
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalMode, setModalMode] = useState<'ADD' | 'EDIT'>('ADD');
   const [currentAccount, setCurrentAccount] = useState<Partial<Account>>({});
@@ -57,7 +54,6 @@ const AccountManagement: React.FC = () => {
     total: 0,
   });
 
-  // Đường dẫn API cơ sở (đã dùng proxy /api rút gọn domain)
   const apiUrl = '/api';
 
   const fetchStats = useCallback(async () => {
@@ -80,7 +76,6 @@ const AccountManagement: React.FC = () => {
     }
   }, []);
 
-  // Hàm gọi API lấy danh sách tài khoản thực tế từ Backend Database
   const fetchAccounts = async (type: 'CUSTOMER' | 'STAFF') => {
     try {
       setLoading(true);
@@ -89,7 +84,6 @@ const AccountManagement: React.FC = () => {
       
       const rawData = response.data?.data?.content || response.data?.data || [];
       
-      // Chuyển đổi (map) dữ liệu JSON từ Backend về đúng định dạng hiển thị của Frontend
       const transformed = rawData.map((item: any) => ({
         id: item.id,
         email: item.email || '',
@@ -102,14 +96,12 @@ const AccountManagement: React.FC = () => {
       setAccounts(transformed);
     } catch (error) {
       console.error('Lỗi khi tải dữ liệu tài khoản:', error);
-      // Làm rỗng danh sách nếu gọi API thất bại thay vì hiện dữ liệu giả (dummy data)
       setAccounts([]);
     } finally {
       setLoading(false);
     }
   };
 
-  // Tự động lấy lại danh sách tài khoản mỗi khi chuyển tab (Khách hàng <-> Nhân viên)
   useEffect(() => {
     fetchAccounts(activeTab);
   }, [activeTab]);
@@ -118,53 +110,49 @@ const AccountManagement: React.FC = () => {
     void fetchStats();
   }, [fetchStats]);
 
-  // Logic lọc dữ liệu dựa trên ô tìm kiếm (tìm qua email, tên hoặc sđt)
   const filteredAccounts = accounts.filter(acc => 
     acc.email.toLowerCase().includes(searchTerm.toLowerCase()) || 
     acc.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     acc.phone?.includes(searchTerm)
   );
 
-  // Hàm xử lý mở hộp thoại thêm mới / chỉnh sửa
   const openModal = (mode: 'ADD' | 'EDIT', account?: Account) => {
     setModalMode(mode);
     setCustomPassword('');
     if (mode === 'EDIT' && account) {
-      setCurrentAccount({ ...account }); // Nếu là chỉnh sửa thì clone dữ liệu dòng này vào form
+      setCurrentAccount({ ...account });
     } else {
-      setCurrentAccount({ role: activeTab, status: 'ACTIVE' }); // Mặc định Thêm thì chọn sẵn role/trạng thái
+      setCurrentAccount({ role: activeTab, status: 'ACTIVE' });
     }
     setIsModalOpen(true);
   };
 
-  // Hàm xử lý đóng (hủy bỏ) hộp thoại, dọn dẹp state nhập liệu
   const closeModal = () => {
     setIsModalOpen(false);
     setCurrentAccount({});
     setCustomPassword('');
   };
 
-  // Hàm gọi API thực hiện chức năng lưu (Thêm mới / Edit) sau khi bấm "Lưu"
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
     try {
       const endpoint = currentAccount.role === 'CUSTOMER' ? '/admin/customers' : '/admin/staffs';
       
-      if (modalMode === 'ADD') { // Thêm dữ liệu tài khoản mới
+      if (modalMode === 'ADD') {
         const ph = String(currentAccount.phone ?? '')
           .replace(/\u00A0/g, ' ')
           .trim();
         const payload: Record<string, string | null> = {
           email: String(currentAccount.email ?? ''),
           fullName: String(currentAccount.name ?? ''),
-          password: customPassword || '123456', // mặc định 123456 nếu để trống
+          password: customPassword || '123456',
         };
         payload.phone = ph.length > 0 ? ph : null;
         await api.post(`${apiUrl}${endpoint}`, payload, {
           headers: { 'Content-Type': 'application/json' },
         });
-      } else { // Cập nhật dữ liệu
+      } else {
         const ph = String(currentAccount.phone ?? '')
           .replace(/\u00A0/g, ' ')
           .trim();
@@ -177,7 +165,6 @@ const AccountManagement: React.FC = () => {
         });
       }
       
-      // Load lại bảng data sau khi Thêm/Sửa thành công
       fetchAccounts(activeTab);
       void fetchStats();
       closeModal();
@@ -189,7 +176,6 @@ const AccountManagement: React.FC = () => {
     }
   };
 
-  // Hàm gọi API để xóa vĩnh viễn tài khoản
   const handleDelete = async (id: number, role: string) => {
     if (!window.confirm('Bạn có chắc chắn muốn xóa tài khoản này vĩnh viễn?')) return;
     try {
@@ -203,7 +189,6 @@ const AccountManagement: React.FC = () => {
     }
   };
 
-  // Hàm gọi API để thay đổi trạng thái (ACTIVE <-> INACTIVE) của tài khoản
   const handleToggleStatus = async (id: number, currentStatus: string, role: string) => {
     const newStatus = currentStatus === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE';
     try {
@@ -217,10 +202,8 @@ const AccountManagement: React.FC = () => {
     }
   };
 
-  // Render giao diện quản lý tài khoản bao gồm Tab (Khách hàng/Nhân viên), Thanh tìm kiếm và Bảng dữ liệu
   return (
     <div className='flex flex-col gap-5 animate-fade-in'>
-      {/* Header */}
       <div className='flex flex-col sm:flex-row sm:items-center justify-between gap-3'>
         <h2 className='text-2xl font-bold text-gray-800 flex items-center gap-2.5'>
           <span className="w-1.5 h-6 bg-gradient-to-b from-[#ef5222] to-[#fd7e14] rounded-full inline-block"></span>
@@ -258,7 +241,6 @@ const AccountManagement: React.FC = () => {
       />
 
       <div className='bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden'>
-        {/* Toolbar */}
         <div className='p-4 border-b border-gray-200 flex flex-col sm:flex-row justify-between items-center gap-3 bg-gray-50/50'>
           <div className='flex space-x-1 bg-gray-200/50 p-1 rounded-lg w-full sm:w-auto'>
             <button 
@@ -289,7 +271,6 @@ const AccountManagement: React.FC = () => {
           </div>
         </div>
 
-        {/* Table */}
         <div className='overflow-x-auto'>
           <table className='w-full text-left border-collapse'>
             <thead>
@@ -398,7 +379,6 @@ const AccountManagement: React.FC = () => {
           </table>
         </div>
         
-        {/* Pagination mock */}
         <div className="p-4 border-t border-gray-100 bg-gray-50/50 flex justify-between items-center text-sm text-gray-600">
           <span>Hiển thị 1 - {filteredAccounts.length} trong tổng số {filteredAccounts.length} tài khoản</span>
           <div className="flex gap-1">
@@ -409,7 +389,6 @@ const AccountManagement: React.FC = () => {
         </div>
       </div>
 
-      {/* Modal CRUD */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4 animate-fade-in">
           <div className="bg-white rounded-xl shadow-xl w-full max-w-md overflow-hidden animate-slide-up">

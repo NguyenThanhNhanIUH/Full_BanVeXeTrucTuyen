@@ -17,8 +17,8 @@ api.interceptors.response.use(
     const st = err.response?.status;
     if (st === 401 || st === 403) {
       clearAuth();
-      if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/admin/login')) {
-        window.location.replace('/admin/login');
+      if (typeof window !== 'undefined' && window.location.pathname !== '/') {
+        window.location.replace('/');
       }
     }
     return Promise.reject(err);

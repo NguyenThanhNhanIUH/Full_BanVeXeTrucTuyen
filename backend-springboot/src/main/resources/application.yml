@@ -7,7 +7,7 @@ spring:
     url: jdbc:mariadb://localhost:3306/QuanLyVeXe?characterEncoding=utf8&useUnicode=true&restrictedAuth=mysql_native_password
     driver-class-name: org.mariadb.jdbc.Driver
     username: root
-    password: sapassword
+    password: root
   jpa:
     hibernate:
       ddl-auto: validate

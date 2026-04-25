@@ -23,13 +23,13 @@ const AdminLayout: React.FC = () => {
 
   const onLogout = () => {
     clearAuth();
-    navigate('/login', { replace: true });
+    navigate('/', { replace: true });
   };
 
   return (
     <div className='flex h-screen bg-[#f8f9fa] flex-col'>
       <header className='bg-gradient-to-r from-[#ef5222] to-[#fd7e14] text-white shadow-md z-20 h-16 flex items-center justify-between px-4'>
-        <div className='flex items-center gap-3 w-60'>
+        <div className='flex items-center gap-2 min-w-0 flex-1'>
           <button 
             type='button'
             onClick={() => setSidebarOpen(!sidebarOpen)}
@@ -37,9 +37,9 @@ const AdminLayout: React.FC = () => {
           >
             <Menu size={24} />
           </button>
-          <div className='flex items-center gap-2 font-bold text-xl tracking-wide bg-white text-[#ef5222] px-4 py-1 rounded-full shadow-sm'>
-            <Bus size={20} />
-            <span>FUTA Admin</span>
+          <div className='flex items-center gap-2 font-bold text-lg tracking-wide bg-white text-[#ef5222] px-4 py-1.5 rounded-full shadow-sm max-w-[260px]'>
+            <Bus size={19} />
+            <span className='truncate'>VinaGo Admin</span>
           </div>
         </div>
 

@@ -210,6 +210,10 @@ public class CustomerTicketService {
         var x = c.getXe();
         int trong = bookingCatalogService.countAvailableSeats(c);
         int tongGhe = BookingCatalogService.safeTongGhe(c);
+        Integer thoiGianDuKienPhut = t != null ? t.getThoiGianDuKien() : null;
+        var gioDenDuKien = (thoiGianDuKienPhut != null && c.getGioDi() != null)
+            ? c.getGioDi().plusMinutes(thoiGianDuKienPhut)
+            : null;
         TripSummaryDto trip = new TripSummaryDto(
             c.getId(),
             t != null ? t.getTenTuyen() : "",
@@ -217,6 +221,9 @@ public class CustomerTicketService {
             t != null ? t.getDiemDen() : "",
             c.getNgayDi(),
             c.getGioDi(),
+            gioDenDuKien,
+            thoiGianDuKienPhut,
+            t != null ? t.getKhoangCach() : null,
             c.getGiaVe(),
             x != null ? x.getLoaiXe() : "",
             x != null ? x.getBienSo() : "",

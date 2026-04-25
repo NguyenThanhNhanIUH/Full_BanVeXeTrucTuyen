@@ -16,6 +16,7 @@ import com.banvexe.accountmanagement.repository.ChuyenXeRepository;
 import com.banvexe.accountmanagement.repository.TuyenXeRepository;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -63,6 +64,14 @@ public class BookingCatalogService {
                 t.getTrangThai() != null ? t.getTrangThai().name() : "INACTIVE"
             ))
             .toList();
+    }
+
+    public List<String> suggestOrigins(String keyword) {
+        return tuyenXeRepository.suggestOrigins(RouteStatus.ACTIVE, normalizeKeyword(keyword));
+    }
+
+    public List<String> suggestDestinations(String keyword) {
+        return tuyenXeRepository.suggestDestinations(RouteStatus.ACTIVE, normalizeKeyword(keyword));
     }
 
     public List<TripSummaryDto> searchTrips(String diemDi, String diemDen, LocalDate ngayDi, int soLuongVeToiThieu) {
@@ -141,6 +150,11 @@ public class BookingCatalogService {
         TuyenXe t = c.getTuyenXe();
         Xe x = c.getXe();
         int tongGhe = safeTongGhe(c);
+        Integer thoiGianDuKienPhut = t != null ? t.getThoiGianDuKien() : null;
+        LocalTime gioDenDuKien = null;
+        if (thoiGianDuKienPhut != null && c.getGioDi() != null) {
+            gioDenDuKien = c.getGioDi().plusMinutes(thoiGianDuKienPhut);
+        }
         return new TripSummaryDto(
             c.getId(),
             t != null ? t.getTenTuyen() : "",
@@ -148,6 +162,9 @@ public class BookingCatalogService {
             t != null ? t.getDiemDen() : "",
             c.getNgayDi(),
             c.getGioDi(),
+            gioDenDuKien,
+            thoiGianDuKienPhut,
+            t != null ? t.getKhoangCach() : null,
             c.getGiaVe(),
             x != null ? x.getLoaiXe() : "",
             x != null ? x.getBienSo() : "",
@@ -194,6 +211,10 @@ public class BookingCatalogService {
             return "%";
         }
         return s.trim();
+    }
+
+    private String normalizeKeyword(String keyword) {
+        return keyword == null ? "" : keyword.trim();
     }
 
     /**

@@ -36,6 +36,18 @@ public class BookingCatalogController {
         return ResponseEntity.ok(ApiResponse.success(bookingCatalogService.searchRoutes(diemDi, diemDen)));
     }
 
+    @GetMapping("/origins")
+    public ResponseEntity<ApiResponse<List<String>>> suggestOrigins(@RequestParam(required = false) String keyword) {
+        return ResponseEntity.ok(ApiResponse.success(bookingCatalogService.suggestOrigins(keyword)));
+    }
+
+    @GetMapping("/destinations")
+    public ResponseEntity<ApiResponse<List<String>>> suggestDestinations(
+        @RequestParam(required = false) String keyword
+    ) {
+        return ResponseEntity.ok(ApiResponse.success(bookingCatalogService.suggestDestinations(keyword)));
+    }
+
     @GetMapping("/trips")
     public ResponseEntity<ApiResponse<List<TripSummaryDto>>> searchTrips(
         @RequestParam(required = false) String diemDi,

@@ -1,10 +1,6 @@
--- =======================================================
--- 1. TẠO DATABASE VÀ CÁC BẢNG (SCHEMA)
--- =======================================================
 CREATE DATABASE IF NOT EXISTS QuanLyVeXe DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 USE QuanLyVeXe;
 
--- BẢNG TÀI KHOẢN (Users)
 CREATE TABLE tai_khoan (
     id INT AUTO_INCREMENT PRIMARY KEY,
     email VARCHAR(100) UNIQUE NOT NULL,
@@ -15,27 +11,24 @@ CREATE TABLE tai_khoan (
     trang_thai ENUM('ACTIVE', 'INACTIVE', 'DELETED') DEFAULT 'ACTIVE'
 );
 
--- BẢNG XE (Buses)
 CREATE TABLE Xe (
     id INT AUTO_INCREMENT PRIMARY KEY,
     bien_so VARCHAR(20) UNIQUE NOT NULL,
-    loai_xe VARCHAR(50) NOT NULL, 
+    loai_xe VARCHAR(50) NOT NULL,
     so_ghe INT NOT NULL
 );
 
--- BẢNG TUYẾN XE (Routes)
 CREATE TABLE TuyenXe (
     id INT AUTO_INCREMENT PRIMARY KEY,
     ten_tuyen VARCHAR(255) NOT NULL,
     diem_di VARCHAR(100) NOT NULL,
     diem_den VARCHAR(100) NOT NULL,
-    khoang_cach DECIMAL(10,2), 
-    thoi_gian_du_kien INT, 
+    khoang_cach DECIMAL(10,2),
+    thoi_gian_du_kien INT,
     gia_ve_co_ban DECIMAL(10,2) NOT NULL,
     trang_thai ENUM('ACTIVE', 'INACTIVE') DEFAULT 'ACTIVE'
 );
 
--- BẢNG CHUYẾN XE (Trips)
 CREATE TABLE ChuyenXe (
     id INT AUTO_INCREMENT PRIMARY KEY,
     tuyen_xe_id INT NOT NULL,
@@ -48,10 +41,9 @@ CREATE TABLE ChuyenXe (
     FOREIGN KEY (xe_id) REFERENCES Xe(id)
 );
 
--- BẢNG VÉ XE / ĐƠN ĐẶT VÉ (Tickets)
 CREATE TABLE VeXe (
     id INT AUTO_INCREMENT PRIMARY KEY,
-    ma_ve VARCHAR(20) UNIQUE NOT NULL, 
+    ma_ve VARCHAR(20) UNIQUE NOT NULL,
     khach_hang_id INT NOT NULL,
     chuyen_xe_id INT NOT NULL,
     ngay_dat TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -63,66 +55,179 @@ CREATE TABLE VeXe (
     FOREIGN KEY (chuyen_xe_id) REFERENCES ChuyenXe(id)
 );
 
--- BẢNG CHI TIẾT VÉ / GHẾ (Ticket_Details)
 CREATE TABLE ChiTietVe (
     id INT AUTO_INCREMENT PRIMARY KEY,
     ve_xe_id INT NOT NULL,
-    so_ghe VARCHAR(10) NOT NULL, 
+    so_ghe VARCHAR(10) NOT NULL,
     FOREIGN KEY (ve_xe_id) REFERENCES VeXe(id) ON DELETE CASCADE,
-    UNIQUE KEY (ve_xe_id, so_ghe) 
+    UNIQUE KEY (ve_xe_id, so_ghe)
 );
 
--- BẢNG THANH TOÁN (Payments)
 CREATE TABLE ThanhToan (
     id INT AUTO_INCREMENT PRIMARY KEY,
     ve_xe_id INT NOT NULL,
     so_tien DECIMAL(10,2) NOT NULL,
     phuong_thuc ENUM('THE', 'VI_DIEN_TU', 'CHUYEN_KHOAN') NOT NULL,
-    ma_giao_dich VARCHAR(100), 
+    ma_giao_dich VARCHAR(100),
     trang_thai ENUM('DANG_XU_LY', 'THANH_CONG', 'THAT_BAI') DEFAULT 'DANG_XU_LY',
     ngay_thanh_toan TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (ve_xe_id) REFERENCES VeXe(id)
 );
--- =======================================================
--- 2. THÊM DỮ LIỆU MẪU (MOCK DATA)
--- =======================================================
 
--- Dữ liệu mẫu bảng tai_khoan
 INSERT INTO tai_khoan (email, so_dien_thoai, mat_khau, ho_ten, vai_tro, trang_thai) VALUES
 ('admin.baoxuyen@gmail.com', '0901234567', 'e10adc3949ba59abbe56e057f20f883e', 'Trần Bảo Xuyên', 'QUAN_TRI', 'ACTIVE'),
 ('khachhang.a@gmail.com', '0923456789', 'e10adc3949ba59abbe56e057f20f883e', 'Nguyễn Văn A', 'KHACH_HANG', 'ACTIVE'),
 ('khachhang.b@gmail.com', '0934567890', 'e10adc3949ba59abbe56e057f20f883e', 'Trần Thị B', 'KHACH_HANG', 'ACTIVE');
 
--- Dữ liệu mẫu bảng Xe
 INSERT INTO Xe (bien_so, loai_xe, so_ghe) VALUES
-('51B-123.45', 'Giường nằm 40 chỗ', 40),
-('51B-678.90', 'Giường nằm 40 chỗ', 40),
-('51F-112.23', 'Limousine 9 chỗ', 9);
+('51B-123.45', 'Giường nằm 34 chỗ', 34),
+('51B-222.10', 'Limosine 11 chỗ', 11),
+('51B-999.11', 'Ghế 28 chỗ', 28);
 
--- Dữ liệu mẫu bảng TuyenXe
+-- Tuyến 1-20 xuôi, 21-40 ngược; 41-42 Đà Lạt; 43-44 Sài Gòn <-> Cà Mau
 INSERT INTO TuyenXe (ten_tuyen, diem_di, diem_den, khoang_cach, thoi_gian_du_kien, gia_ve_co_ban, trang_thai) VALUES
-('Sài Gòn - Đà Lạt', 'TP. Hồ Chí Minh', 'Đà Lạt', 300.00, 420, 250000.00, 'ACTIVE'),
-('Sài Gòn - Nha Trang', 'TP. Hồ Chí Minh', 'Nha Trang', 400.00, 540, 300000.00, 'ACTIVE');
+('Huế - TP. Hồ Chí Minh', 'Thừa Thiên Huế', 'TP. Hồ Chí Minh', 1080.00, 1000, 320000.00, 'ACTIVE'),
+('Đà Nẵng - TP. Hồ Chí Minh', 'Đà Nẵng', 'TP. Hồ Chí Minh', 850.00, 900, 300000.00, 'ACTIVE'),
+('Hội An - Cần Thơ', 'Hội An', 'Cần Thơ', 1200.00, 1100, 350000.00, 'ACTIVE'),
+('Quảng Ngãi - Bến Tre', 'Quảng Ngãi', 'Bến Tre', 900.00, 950, 310000.00, 'ACTIVE'),
+('Quy Nhơn - Vũng Tàu', 'Quy Nhơn (Bình Định)', 'Vũng Tàu', 750.00, 800, 290000.00, 'ACTIVE'),
+('Tuy Hòa - An Giang', 'Tuy Hòa', 'An Giang', 720.00, 780, 280000.00, 'ACTIVE'),
+('Nha Trang - TP. Hồ Chí Minh', 'Nha Trang', 'TP. Hồ Chí Minh', 430.00, 520, 260000.00, 'ACTIVE'),
+('Cam Ranh - Đồng Tháp', 'Cam Ranh', 'Đồng Tháp', 550.00, 600, 270000.00, 'ACTIVE'),
+('Phan Thiết - Cần Thơ', 'Phan Thiết', 'Cần Thơ', 350.00, 420, 240000.00, 'ACTIVE'),
+('Phan Rang - Sóc Trăng', 'Phan Rang (Ninh Thuận)', 'Sóc Trăng', 420.00, 500, 250000.00, 'ACTIVE'),
+('Nha Trang - Cần Thơ', 'Nha Trang', 'Cần Thơ', 620.00, 700, 300000.00, 'ACTIVE'),
+('Quy Nhơn - TP. Hồ Chí Minh', 'Quy Nhơn (Bình Định)', 'TP. Hồ Chí Minh', 680.00, 750, 295000.00, 'ACTIVE'),
+('Đà Nẵng - Bến Tre', 'Đà Nẵng', 'Bến Tre', 980.00, 1020, 330000.00, 'ACTIVE'),
+('Hội An - Vũng Tàu', 'Hội An', 'Vũng Tàu', 820.00, 880, 305000.00, 'ACTIVE'),
+('Quảng Nam - Cần Thơ', 'Quảng Nam', 'Cần Thơ', 1100.00, 1050, 340000.00, 'ACTIVE'),
+('Tam Kỳ - Long An', 'Tam Kỳ (Quảng Nam)', 'Long An', 950.00, 920, 315000.00, 'ACTIVE'),
+('Sa Huỳnh - Tiền Giang', 'Sa Huỳnh (Quảng Ngãi)', 'Tiền Giang', 850.00, 900, 300000.00, 'ACTIVE'),
+('Quảng Ngãi - Cần Thơ', 'Quảng Ngãi', 'Cần Thơ', 800.00, 880, 300000.00, 'ACTIVE'),
+('Huế - Vũng Tàu', 'Thừa Thiên Huế', 'Vũng Tàu', 950.00, 920, 325000.00, 'ACTIVE'),
+('Tuy Hòa - TP. Hồ Chí Minh', 'Tuy Hòa', 'TP. Hồ Chí Minh', 560.00, 640, 270000.00, 'ACTIVE'),
+('TP. Hồ Chí Minh - Thừa Thiên Huế', 'TP. Hồ Chí Minh', 'Thừa Thiên Huế', 1080.00, 1000, 320000.00, 'ACTIVE'),
+('TP. Hồ Chí Minh - Đà Nẵng', 'TP. Hồ Chí Minh', 'Đà Nẵng', 850.00, 900, 300000.00, 'ACTIVE'),
+('Cần Thơ - Hội An', 'Cần Thơ', 'Hội An', 1200.00, 1100, 350000.00, 'ACTIVE'),
+('Bến Tre - Quảng Ngãi', 'Bến Tre', 'Quảng Ngãi', 900.00, 950, 310000.00, 'ACTIVE'),
+('Vũng Tàu - Quy Nhơn (Bình Định)', 'Vũng Tàu', 'Quy Nhơn (Bình Định)', 750.00, 800, 290000.00, 'ACTIVE'),
+('An Giang - Tuy Hòa', 'An Giang', 'Tuy Hòa', 720.00, 780, 280000.00, 'ACTIVE'),
+('TP. Hồ Chí Minh - Nha Trang', 'TP. Hồ Chí Minh', 'Nha Trang', 430.00, 520, 260000.00, 'ACTIVE'),
+('Đồng Tháp - Cam Ranh', 'Đồng Tháp', 'Cam Ranh', 550.00, 600, 270000.00, 'ACTIVE'),
+('Cần Thơ - Phan Thiết', 'Cần Thơ', 'Phan Thiết', 350.00, 420, 240000.00, 'ACTIVE'),
+('Sóc Trăng - Phan Rang (Ninh Thuận)', 'Sóc Trăng', 'Phan Rang (Ninh Thuận)', 420.00, 500, 250000.00, 'ACTIVE'),
+('Cần Thơ - Nha Trang', 'Cần Thơ', 'Nha Trang', 620.00, 700, 300000.00, 'ACTIVE'),
+('TP. Hồ Chí Minh - Quy Nhơn (Bình Định)', 'TP. Hồ Chí Minh', 'Quy Nhơn (Bình Định)', 680.00, 750, 295000.00, 'ACTIVE'),
+('Bến Tre - Đà Nẵng', 'Bến Tre', 'Đà Nẵng', 980.00, 1020, 330000.00, 'ACTIVE'),
+('Vũng Tàu - Hội An', 'Vũng Tàu', 'Hội An', 820.00, 880, 305000.00, 'ACTIVE'),
+('Cần Thơ - Quảng Nam', 'Cần Thơ', 'Quảng Nam', 1100.00, 1050, 340000.00, 'ACTIVE'),
+('Long An - Tam Kỳ (Quảng Nam)', 'Long An', 'Tam Kỳ (Quảng Nam)', 950.00, 920, 315000.00, 'ACTIVE'),
+('Tiền Giang - Sa Huỳnh (Quảng Ngãi)', 'Tiền Giang', 'Sa Huỳnh (Quảng Ngãi)', 850.00, 900, 300000.00, 'ACTIVE'),
+('Cần Thơ - Quảng Ngãi', 'Cần Thơ', 'Quảng Ngãi', 800.00, 880, 300000.00, 'ACTIVE'),
+('Vũng Tàu - Thừa Thiên Huế', 'Vũng Tàu', 'Thừa Thiên Huế', 950.00, 920, 325000.00, 'ACTIVE'),
+('TP. Hồ Chí Minh - Tuy Hòa', 'TP. Hồ Chí Minh', 'Tuy Hòa', 560.00, 640, 270000.00, 'ACTIVE'),
+('Đà Lạt - TP. Hồ Chí Minh', 'Đà Lạt', 'TP. Hồ Chí Minh', 300.00, 420, 250000.00, 'ACTIVE'),
+('TP. Hồ Chí Minh - Đà Lạt', 'TP. Hồ Chí Minh', 'Đà Lạt', 300.00, 420, 250000.00, 'ACTIVE'),
+('TP. Hồ Chí Minh - Cà Mau', 'TP. Hồ Chí Minh', 'Cà Mau', 305.00, 360, 220000.00, 'ACTIVE'),
+('Cà Mau - TP. Hồ Chí Minh', 'Cà Mau', 'TP. Hồ Chí Minh', 305.00, 360, 220000.00, 'ACTIVE');
 
--- Dữ liệu mẫu bảng ChuyenXe (ngày giờ trong tương lai so với 2026-04-22 — phù hợp tạo chuyến mới / kiểm thử)
+-- Chuyến: tuyến 1-44; SG–Cà Mau: 20/12/2026 mỗi giờ 00:00–23:00 (tuyến 43+44)
 INSERT INTO ChuyenXe (tuyen_xe_id, xe_id, ngay_di, gio_di, gia_ve, trang_thai) VALUES
-(1, 1, '2026-12-20', '22:00:00', 250000.00, 'CHUA_KHOI_HANH'),
-(1, 3, '2026-12-20', '23:30:00', 350000.00, 'CHUA_KHOI_HANH'),
-(2, 2, '2026-12-21', '20:00:00', 300000.00, 'CHUA_KHOI_HANH');
+(1, 1, '2026-12-10', '19:00:00', 320000.00, 'CHUA_KHOI_HANH'),
+(2, 2, '2026-12-10', '20:30:00', 300000.00, 'CHUA_KHOI_HANH'),
+(3, 3, '2026-12-10', '21:00:00', 350000.00, 'CHUA_KHOI_HANH'),
+(4, 1, '2026-12-11', '18:00:00', 310000.00, 'CHUA_KHOI_HANH'),
+(5, 2, '2026-12-11', '19:15:00', 290000.00, 'CHUA_KHOI_HANH'),
+(6, 3, '2026-12-11', '20:00:00', 280000.00, 'CHUA_KHOI_HANH'),
+(7, 1, '2026-12-12', '22:00:00', 260000.00, 'CHUA_KHOI_HANH'),
+(8, 2, '2026-12-12', '20:45:00', 270000.00, 'CHUA_KHOI_HANH'),
+(9, 3, '2026-12-13', '07:00:00', 240000.00, 'CHUA_KHOI_HANH'),
+(10, 1, '2026-12-13', '19:30:00', 250000.00, 'CHUA_KHOI_HANH'),
+(11, 2, '2026-12-14', '20:00:00', 300000.00, 'CHUA_KHOI_HANH'),
+(12, 3, '2026-12-14', '18:30:00', 295000.00, 'CHUA_KHOI_HANH'),
+(13, 1, '2026-12-15', '19:00:00', 330000.00, 'CHUA_KHOI_HANH'),
+(14, 2, '2026-12-15', '20:00:00', 305000.00, 'CHUA_KHOI_HANH'),
+(15, 3, '2026-12-16', '17:00:00', 340000.00, 'CHUA_KHOI_HANH'),
+(16, 1, '2026-12-16', '20:00:00', 315000.00, 'CHUA_KHOI_HANH'),
+(17, 2, '2026-12-17', '18:45:00', 300000.00, 'CHUA_KHOI_HANH'),
+(18, 3, '2026-12-17', '19:15:00', 300000.00, 'CHUA_KHOI_HANH'),
+(19, 1, '2026-12-18', '18:00:00', 325000.00, 'CHUA_KHOI_HANH'),
+(20, 2, '2026-12-18', '21:00:00', 270000.00, 'CHUA_KHOI_HANH'),
+(21, 3, '2026-12-12', '19:00:00', 320000.00, 'CHUA_KHOI_HANH'),
+(24, 1, '2026-12-13', '20:00:00', 310000.00, 'CHUA_KHOI_HANH'),
+(27, 2, '2026-12-14', '18:00:00', 260000.00, 'CHUA_KHOI_HANH'),
+(32, 3, '2026-12-20', '08:00:00', 330000.00, 'CHUA_KHOI_HANH'),
+(36, 1, '2026-12-22', '19:00:00', 300000.00, 'CHUA_KHOI_HANH'),
+(41, 2, '2026-12-19', '08:00:00', 250000.00, 'CHUA_KHOI_HANH'),
+(42, 3, '2026-12-19', '20:00:00', 250000.00, 'CHUA_KHOI_HANH'),
+(41, 1, '2026-12-20', '14:00:00', 250000.00, 'CHUA_KHOI_HANH'),
+(42, 2, '2026-12-21', '08:00:00', 250000.00, 'CHUA_KHOI_HANH'),
+(41, 3, '2026-12-24', '21:00:00', 250000.00, 'CHUA_KHOI_HANH'),
+(42, 1, '2026-12-25', '20:00:00', 250000.00, 'CHUA_KHOI_HANH'),
+(7, 1, '2026-12-23', '21:00:00', 260000.00, 'CHUA_KHOI_HANH'),
+(8, 2, '2026-12-24', '19:00:00', 270000.00, 'CHUA_KHOI_HANH'),
+(9, 3, '2026-12-25', '07:00:00', 240000.00, 'CHUA_KHOI_HANH'),
+(22, 1, '2026-12-20', '18:00:00', 350000.00, 'CHUA_KHOI_HANH'),
+(30, 2, '2026-12-26', '20:00:00', 250000.00, 'CHUA_KHOI_HANH'),
+(43, 1, '2026-12-20', '00:00:00', 220000.00, 'CHUA_KHOI_HANH'),
+(43, 2, '2026-12-20', '01:00:00', 220000.00, 'CHUA_KHOI_HANH'),
+(43, 3, '2026-12-20', '02:00:00', 220000.00, 'CHUA_KHOI_HANH'),
+(43, 1, '2026-12-20', '03:00:00', 220000.00, 'CHUA_KHOI_HANH'),
+(43, 2, '2026-12-20', '04:00:00', 220000.00, 'CHUA_KHOI_HANH'),
+(43, 3, '2026-12-20', '05:00:00', 220000.00, 'CHUA_KHOI_HANH'),
+(43, 1, '2026-12-20', '06:00:00', 220000.00, 'CHUA_KHOI_HANH'),
+(43, 2, '2026-12-20', '07:00:00', 220000.00, 'CHUA_KHOI_HANH'),
+(43, 3, '2026-12-20', '08:00:00', 220000.00, 'CHUA_KHOI_HANH'),
+(43, 1, '2026-12-20', '09:00:00', 220000.00, 'CHUA_KHOI_HANH'),
+(43, 2, '2026-12-20', '10:00:00', 220000.00, 'CHUA_KHOI_HANH'),
+(43, 3, '2026-12-20', '11:00:00', 220000.00, 'CHUA_KHOI_HANH'),
+(43, 1, '2026-12-20', '12:00:00', 220000.00, 'CHUA_KHOI_HANH'),
+(43, 2, '2026-12-20', '13:00:00', 220000.00, 'CHUA_KHOI_HANH'),
+(43, 3, '2026-12-20', '14:00:00', 220000.00, 'CHUA_KHOI_HANH'),
+(43, 1, '2026-12-20', '15:00:00', 220000.00, 'CHUA_KHOI_HANH'),
+(43, 2, '2026-12-20', '16:00:00', 220000.00, 'CHUA_KHOI_HANH'),
+(43, 3, '2026-12-20', '17:00:00', 220000.00, 'CHUA_KHOI_HANH'),
+(43, 1, '2026-12-20', '18:00:00', 220000.00, 'CHUA_KHOI_HANH'),
+(43, 2, '2026-12-20', '19:00:00', 220000.00, 'CHUA_KHOI_HANH'),
+(43, 3, '2026-12-20', '20:00:00', 220000.00, 'CHUA_KHOI_HANH'),
+(43, 1, '2026-12-20', '21:00:00', 220000.00, 'CHUA_KHOI_HANH'),
+(43, 2, '2026-12-20', '22:00:00', 220000.00, 'CHUA_KHOI_HANH'),
+(43, 3, '2026-12-20', '23:00:00', 220000.00, 'CHUA_KHOI_HANH'),
+(44, 1, '2026-12-20', '00:00:00', 220000.00, 'CHUA_KHOI_HANH'),
+(44, 2, '2026-12-20', '01:00:00', 220000.00, 'CHUA_KHOI_HANH'),
+(44, 3, '2026-12-20', '02:00:00', 220000.00, 'CHUA_KHOI_HANH'),
+(44, 1, '2026-12-20', '03:00:00', 220000.00, 'CHUA_KHOI_HANH'),
+(44, 2, '2026-12-20', '04:00:00', 220000.00, 'CHUA_KHOI_HANH'),
+(44, 3, '2026-12-20', '05:00:00', 220000.00, 'CHUA_KHOI_HANH'),
+(44, 1, '2026-12-20', '06:00:00', 220000.00, 'CHUA_KHOI_HANH'),
+(44, 2, '2026-12-20', '07:00:00', 220000.00, 'CHUA_KHOI_HANH'),
+(44, 3, '2026-12-20', '08:00:00', 220000.00, 'CHUA_KHOI_HANH'),
+(44, 1, '2026-12-20', '09:00:00', 220000.00, 'CHUA_KHOI_HANH'),
+(44, 2, '2026-12-20', '10:00:00', 220000.00, 'CHUA_KHOI_HANH'),
+(44, 3, '2026-12-20', '11:00:00', 220000.00, 'CHUA_KHOI_HANH'),
+(44, 1, '2026-12-20', '12:00:00', 220000.00, 'CHUA_KHOI_HANH'),
+(44, 2, '2026-12-20', '13:00:00', 220000.00, 'CHUA_KHOI_HANH'),
+(44, 3, '2026-12-20', '14:00:00', 220000.00, 'CHUA_KHOI_HANH'),
+(44, 1, '2026-12-20', '15:00:00', 220000.00, 'CHUA_KHOI_HANH'),
+(44, 2, '2026-12-20', '16:00:00', 220000.00, 'CHUA_KHOI_HANH'),
+(44, 3, '2026-12-20', '17:00:00', 220000.00, 'CHUA_KHOI_HANH'),
+(44, 1, '2026-12-20', '18:00:00', 220000.00, 'CHUA_KHOI_HANH'),
+(44, 2, '2026-12-20', '19:00:00', 220000.00, 'CHUA_KHOI_HANH'),
+(44, 3, '2026-12-20', '20:00:00', 220000.00, 'CHUA_KHOI_HANH'),
+(44, 1, '2026-12-20', '21:00:00', 220000.00, 'CHUA_KHOI_HANH'),
+(44, 2, '2026-12-20', '22:00:00', 220000.00, 'CHUA_KHOI_HANH'),
+(44, 3, '2026-12-20', '23:00:00', 220000.00, 'CHUA_KHOI_HANH');
 
--- Dữ liệu mẫu bảng VeXe
 INSERT INTO VeXe (ma_ve, khach_hang_id, chuyen_xe_id, so_luong_ghe, tong_tien, trang_thai, ghi_chu) VALUES
-('VX20260410_001', 2, 1, 2, 500000.00, 'DA_THANH_TOAN', 'Khách đón tại BX Miền Đông'),
-('VX20260410_002', 3, 2, 1, 350000.00, 'CHO_THANH_TOAN', NULL),
-('VX20260411_003', 2, 3, 3, 900000.00, 'DA_HUY', 'Khách hàng có việc bận đột xuất');
+('VX20260410_001', 2, 1, 2, 640000.00, 'DA_THANH_TOAN', 'Vé mẫu: chuyến Huế - SG'),
+('VX20260410_002', 3, 2, 1, 300000.00, 'CHO_THANH_TOAN', NULL),
+('VX20260411_003', 2, 3, 1, 350000.00, 'DA_HUY', 'Khách hủy');
 
--- Dữ liệu mẫu bảng ChiTietVe
 INSERT INTO ChiTietVe (ve_xe_id, so_ghe) VALUES
-(1, 'A01'), (1, 'A02'), 
-(2, 'A01'),            
-(3, 'B01'), (3, 'B02'), (3, 'B03'); 
+(1, 'A01'), (1, 'A02'),
+(2, 'A01'),
+(3, 'A01');
 
--- Dữ liệu mẫu bảng ThanhToan
 INSERT INTO ThanhToan (ve_xe_id, so_tien, phuong_thuc, ma_giao_dich, trang_thai) VALUES
-(1, 500000.00, 'VI_DIEN_TU', 'MOMO123456789', 'THANH_CONG'),
-(3, 900000.00, 'CHUYEN_KHOAN', 'FT2026411998877', 'THANH_CONG');
+(1, 640000.00, 'VI_DIEN_TU', 'MOMO123456789', 'THANH_CONG'),
+(3, 350000.00, 'CHUYEN_KHOAN', 'FT2026411998877', 'THANH_CONG');

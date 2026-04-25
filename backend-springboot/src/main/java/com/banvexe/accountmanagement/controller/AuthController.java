@@ -5,6 +5,7 @@ import com.banvexe.accountmanagement.dto.EmailRequest;
 import com.banvexe.accountmanagement.dto.LoginRequest;
 import com.banvexe.accountmanagement.dto.MessageResponse;
 import com.banvexe.accountmanagement.dto.RegisterRequest;
+import com.banvexe.accountmanagement.dto.ResetPasswordRequest;
 import com.banvexe.accountmanagement.dto.UserProfileResponse;
 import com.banvexe.accountmanagement.dto.VerifyEmailRequest;
 import com.banvexe.accountmanagement.service.AuthService;
@@ -43,6 +44,21 @@ public class AuthController {
     @PostMapping("/verify-email")
     public ResponseEntity<MessageResponse> verifyEmail(@Valid @RequestBody VerifyEmailRequest request) {
         return ResponseEntity.ok(authService.verifyEmail(request));
+    }
+
+    @PostMapping("/forgot-password/request-otp")
+    public ResponseEntity<MessageResponse> requestPasswordResetOtp(@Valid @RequestBody EmailRequest request) {
+        return ResponseEntity.ok(authService.requestPasswordResetOtp(request));
+    }
+
+    @PostMapping("/forgot-password/verify-otp")
+    public ResponseEntity<MessageResponse> verifyPasswordResetOtp(@Valid @RequestBody VerifyEmailRequest request) {
+        return ResponseEntity.ok(authService.verifyPasswordResetOtp(request));
+    }
+
+    @PostMapping("/forgot-password/reset")
+    public ResponseEntity<MessageResponse> resetPassword(@Valid @RequestBody ResetPasswordRequest request) {
+        return ResponseEntity.ok(authService.resetPassword(request));
     }
 
     @PostMapping("/login")

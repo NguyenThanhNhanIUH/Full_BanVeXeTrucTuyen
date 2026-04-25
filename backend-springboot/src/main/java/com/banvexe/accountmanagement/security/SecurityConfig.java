@@ -33,6 +33,7 @@ public class SecurityConfig {
                 .requestMatchers("/api/auth/login").permitAll()
                 .requestMatchers("/api/auth/verify-email").permitAll()
                 .requestMatchers("/api/auth/resend-otp").permitAll()
+                .requestMatchers("/api/auth/forgot-password/**").permitAll()
                 .requestMatchers("/api/accounts/health").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/catalog/**").permitAll()
                 .requestMatchers("/api/accounts/me/**").authenticated()

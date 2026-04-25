@@ -17,7 +17,9 @@ import java.time.LocalDateTime;
 import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.Set;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
@@ -34,6 +36,8 @@ public class AuthService {
     private final JavaMailSender mailSender;
     private final SecureRandom secureRandom = new SecureRandom();
     private final Map<String, OtpData> otpStore = new ConcurrentHashMap<>();
+    private final Map<String, OtpData> passwordResetOtpStore = new ConcurrentHashMap<>();
+    private final Set<String> verifiedResetEmails = ConcurrentHashMap.newKeySet();
 
     @Value("${spring.mail.username:no-reply@banvexe.local}")
     private String fromEmail;
@@ -55,8 +59,8 @@ public class AuthService {
     public MessageResponse register(RegisterRequest request) {
         String email = normalizeEmail(request.email());
 
-        if (userAccountRepository.findByEmail(email).isPresent()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Email đã tồn tại");
+        if (userAccountRepository.existsByEmail(email)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Email này đã được dùng cho một tài khoản. Vui lòng dùng email khác.");
         }
 
         String phone;
@@ -65,8 +69,8 @@ public class AuthService {
         } catch (IllegalArgumentException e) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, e.getMessage());
         }
-        if (phone != null && userAccountRepository.findByPhone(phone).isPresent()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Số điện thoại đã được sử dụng");
+        if (phone != null && userAccountRepository.existsByPhone(phone)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Số điện thoại này đã được dùng cho một tài khoản. Vui lòng dùng số khác.");
         }
 
         UserAccount user = new UserAccount();
@@ -77,8 +81,15 @@ public class AuthService {
         user.setRole(UserAccount.UserRole.KHACH_HANG);
         user.setStatus(AccountStatus.INACTIVE);
 
-        userAccountRepository.save(user);
-        sendOtp(email, "Xác thực email đăng ký tài khoản");
+        try {
+            userAccountRepository.save(user);
+        } catch (DataIntegrityViolationException e) {
+            throw new ResponseStatusException(
+                HttpStatus.BAD_REQUEST,
+                "Email hoặc số điện thoại trùng với tài khoản đã có trong hệ thống."
+            );
+        }
+        sendOtp(otpStore, email, "Xác thực email đăng ký tài khoản");
 
         return new MessageResponse("Đăng ký thành công. Vui lòng kiểm tra email để lấy OTP xác thực.");
     }
@@ -92,7 +103,7 @@ public class AuthService {
             return new MessageResponse("Tài khoản đã xác thực trước đó.");
         }
 
-        sendOtp(email, "Gửi lại OTP xác thực tài khoản");
+        sendOtp(otpStore, email, "Gửi lại OTP xác thực tài khoản");
         return new MessageResponse("Đã gửi lại OTP qua email.");
     }
 
@@ -121,6 +132,53 @@ public class AuthService {
         otpStore.remove(email);
 
         return new MessageResponse("Xác thực email thành công.");
+    }
+
+    public MessageResponse requestPasswordResetOtp(EmailRequest request) {
+        String email = normalizeEmail(request.email());
+        UserAccount user = userAccountRepository.findByEmail(email).orElse(null);
+        if (user != null) {
+            sendOtp(passwordResetOtpStore, email, "Mã OTP đặt lại mật khẩu");
+        }
+        verifiedResetEmails.remove(email);
+        return new MessageResponse("Đã gửi mã xác thực qua email.");
+    }
+
+    public MessageResponse verifyPasswordResetOtp(VerifyEmailRequest request) {
+        String email = normalizeEmail(request.email());
+        OtpData otpData = passwordResetOtpStore.get(email);
+        if (otpData == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "OTP không tồn tại hoặc đã hết hạn");
+        }
+        if (LocalDateTime.now().isAfter(otpData.expiresAt())) {
+            passwordResetOtpStore.remove(email);
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "OTP đã hết hạn");
+        }
+        if (!otpData.code().equals(request.otp())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "OTP không đúng");
+        }
+
+        verifiedResetEmails.add(email);
+        passwordResetOtpStore.remove(email);
+        return new MessageResponse("Xác thực OTP thành công.");
+    }
+
+    @Transactional
+    public MessageResponse resetPassword(com.banvexe.accountmanagement.dto.ResetPasswordRequest request) {
+        String email = normalizeEmail(request.email());
+        if (!verifiedResetEmails.contains(email)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Vui lòng xác thực OTP trước khi đặt lại mật khẩu");
+        }
+        if (!request.newPassword().equals(request.confirmPassword())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Mật khẩu xác nhận không khớp");
+        }
+
+        UserAccount user = userAccountRepository.findByEmail(email)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Không tìm thấy tài khoản"));
+        user.setPasswordHash(passwordService.encode(request.newPassword()));
+        userAccountRepository.save(user);
+        verifiedResetEmails.remove(email);
+        return new MessageResponse("Đặt lại mật khẩu thành công.");
     }
 
     public AuthResponse login(LoginRequest request) {
@@ -155,10 +213,10 @@ public class AuthService {
         );
     }
 
-    private void sendOtp(String email, String subject) {
+    private void sendOtp(Map<String, OtpData> store, String email, String subject) {
         String otpCode = String.format("%06d", secureRandom.nextInt(1_000_000));
         LocalDateTime expiresAt = LocalDateTime.now().plusMinutes(otpExpirationMinutes);
-        otpStore.put(email, new OtpData(otpCode, expiresAt));
+        store.put(email, new OtpData(otpCode, expiresAt));
 
         try {
             SimpleMailMessage mail = new SimpleMailMessage();

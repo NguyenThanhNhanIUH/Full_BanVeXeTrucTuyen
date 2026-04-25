@@ -22,6 +22,10 @@ public interface UserAccountRepository extends JpaRepository<UserAccount, Intege
 
     Optional<UserAccount> findByPhone(String phone);
 
+    boolean existsByEmail(String email);
+
+    boolean existsByPhone(String phone);
+
     boolean existsByPhoneAndIdNot(String phone, Integer id);
 
     @Query("""
