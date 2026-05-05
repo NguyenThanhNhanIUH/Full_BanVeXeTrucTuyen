@@ -53,4 +53,4 @@ app:
   expose-internal-error-message: ${APP_EXPOSE_INTERNAL_ERROR_MESSAGE:true}
   gemini:
     api-key: ${GEMINI_API_KEY:}
-    model: ${GEMINI_MODEL:gemini-1.5-flash}
+    model: ${GEMINI_MODEL:gemini-2.0-flash}

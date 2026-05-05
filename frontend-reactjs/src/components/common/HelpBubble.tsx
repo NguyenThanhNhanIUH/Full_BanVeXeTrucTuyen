@@ -42,7 +42,13 @@ const HelpBubble = () => {
       });
       const answer = data?.data?.answer?.trim();
       return answer || 'Không thể trả lời lúc này. Bạn thử lại sau nhé.';
-    } catch {
+    } catch (error) {
+      if (axios.isAxiosError<ApiResponse<never>>(error)) {
+        const apiMessage = error.response?.data?.message?.trim();
+        if (apiMessage) {
+          return apiMessage;
+        }
+      }
       return 'Không thể kết nối trợ lý AI. Bạn thử lại sau nhé.';
     }
   };

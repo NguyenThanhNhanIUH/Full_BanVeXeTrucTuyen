@@ -13,11 +13,13 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
+import java.text.Normalizer;
 import java.text.NumberFormat;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import java.util.Locale;
 import java.util.Optional;
 import org.springframework.beans.factory.annotation.Value;
@@ -29,6 +31,19 @@ import org.springframework.web.server.ResponseStatusException;
 public class AssistantChatService {
 
     private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("dd/MM/yyyy");
+    private static final Map<String, String> LOCATION_ALIASES = Map.ofEntries(
+        Map.entry("tphcm", "TP. Hồ Chí Minh"),
+        Map.entry("tp hcm", "TP. Hồ Chí Minh"),
+        Map.entry("tp.hcm", "TP. Hồ Chí Minh"),
+        Map.entry("ho chi minh", "TP. Hồ Chí Minh"),
+        Map.entry("hcm", "TP. Hồ Chí Minh"),
+        Map.entry("sai gon", "TP. Hồ Chí Minh"),
+        Map.entry("sg", "TP. Hồ Chí Minh"),
+        Map.entry("ha noi", "Hà Nội"),
+        Map.entry("hn", "Hà Nội"),
+        Map.entry("da nang", "Đà Nẵng"),
+        Map.entry("dn", "Đà Nẵng")
+    );
 
     private final BookingCatalogService bookingCatalogService;
     private final ObjectMapper objectMapper;
@@ -40,13 +55,13 @@ public class AssistantChatService {
         BookingCatalogService bookingCatalogService,
         ObjectMapper objectMapper,
         @Value("${app.gemini.api-key:}") String apiKey,
-        @Value("${app.gemini.model:gemini-1.5-flash}") String model
+        @Value("${app.gemini.model:gemini-2.0-flash}") String model
     ) {
         this.bookingCatalogService = bookingCatalogService;
         this.objectMapper = objectMapper;
         this.httpClient = HttpClient.newHttpClient();
         this.apiKey = apiKey != null ? apiKey.trim() : "";
-        this.model = model != null && !model.isBlank() ? model.trim() : "gemini-1.5-flash";
+        this.model = model != null && !model.isBlank() ? model.trim() : "gemini-2.0-flash";
     }
 
     public AssistantChatResponse chat(String question) {
@@ -123,10 +138,40 @@ public class AssistantChatService {
 
     private String resolveLocation(String keyword, boolean isOrigin) {
         String trimmed = keyword.trim();
+        String canonicalKeyword = canonicalizeLocation(trimmed);
         List<String> suggestions = isOrigin
-            ? bookingCatalogService.suggestOrigins(trimmed)
-            : bookingCatalogService.suggestDestinations(trimmed);
-        return suggestions.isEmpty() ? trimmed : suggestions.get(0);
+            ? bookingCatalogService.suggestOrigins(canonicalKeyword)
+            : bookingCatalogService.suggestDestinations(canonicalKeyword);
+        if (suggestions.isEmpty()) {
+            return canonicalKeyword;
+        }
+        String normalizedInput = normalizeLocationForMatch(canonicalKeyword);
+        return suggestions.stream()
+            .filter(item -> {
+                String normalizedItem = normalizeLocationForMatch(item);
+                return normalizedItem.contains(normalizedInput) || normalizedInput.contains(normalizedItem);
+            })
+            .findFirst()
+            .orElse(suggestions.get(0));
+    }
+
+    private String canonicalizeLocation(String raw) {
+        String normalized = normalizeLocationForMatch(raw);
+        return LOCATION_ALIASES.getOrDefault(normalized, raw);
+    }
+
+    private String normalizeLocationForMatch(String value) {
+        if (value == null) {
+            return "";
+        }
+        String lower = value.trim().toLowerCase(Locale.ROOT);
+        String noAccent = Normalizer.normalize(lower, Normalizer.Form.NFD)
+            .replaceAll("\\p{M}", "");
+        return noAccent
+            .replace('.', ' ')
+            .replace('-', ' ')
+            .replaceAll("\\s+", " ")
+            .trim();
     }
 
     private ExtractedQuery extractQuery(String question) {
@@ -172,7 +217,7 @@ public class AssistantChatService {
                 .build();
             HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
             if (response.statusCode() >= 400) {
-                throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Gemini khong phan hoi hop le");
+                throw mapGeminiError(response.statusCode(), response.body());
             }
             JsonNode node = objectMapper.readTree(response.body());
             return node.path("candidates").path(0).path("content").path("parts").path(0).path("text").asText("");
@@ -181,6 +226,31 @@ public class AssistantChatService {
         } catch (Exception ex) {
             throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Khong the ket noi Gemini");
         }
+    }
+
+    private ResponseStatusException mapGeminiError(int statusCode, String body) {
+        try {
+            JsonNode root = objectMapper.readTree(body);
+            String message = root.path("error").path("message").asText("");
+            if (statusCode == 429) {
+                return new ResponseStatusException(HttpStatus.BAD_GATEWAY,
+                    "Gemini het quota/credit. Kiem tra billing va quota tren Google AI Studio.");
+            }
+            if (statusCode == 401 || statusCode == 403) {
+                return new ResponseStatusException(HttpStatus.BAD_GATEWAY,
+                    "Gemini API key khong hop le hoac khong co quyen.");
+            }
+            if (statusCode == 404) {
+                return new ResponseStatusException(HttpStatus.BAD_GATEWAY,
+                    "Model Gemini khong ton tai hoac khong ho tro generateContent.");
+            }
+            if (message != null && !message.isBlank()) {
+                return new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Gemini loi: " + message);
+            }
+        } catch (Exception ignored) {
+            // Fall through to generic message when response body isn't parseable JSON.
+        }
+        return new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Gemini khong phan hoi hop le");
     }
 
     private String extractJson(String text) {
