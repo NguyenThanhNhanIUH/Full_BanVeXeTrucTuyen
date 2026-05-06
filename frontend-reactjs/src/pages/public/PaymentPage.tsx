@@ -50,6 +50,12 @@ type PayOsLinkResponse = {
   qrCode?: string;
 };
 
+type PayOsConfirmResponse = {
+  orderCode: number;
+  paymentStatus: string;
+  paid: boolean;
+};
+
 const methods = [
   'PayOS',
 ];
@@ -58,6 +64,14 @@ const HOLD_SECONDS = 5 * 60;
 
 const formatCurrency = (value: number) =>
   new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND', maximumFractionDigits: 0 }).format(value);
+
+const resolvePayOsQrImage = (qrCode: string | undefined, checkoutUrl: string) => {
+  if (qrCode && (qrCode.startsWith('http://') || qrCode.startsWith('https://') || qrCode.startsWith('data:image/'))) {
+    return qrCode;
+  }
+  const payload = qrCode && qrCode.trim().length > 0 ? qrCode.trim() : checkoutUrl;
+  return `https://api.qrserver.com/v1/create-qr-code/?size=260x260&data=${encodeURIComponent(payload)}`;
+};
 
 const formatDateTime = (trip?: TripPayload) => {
   if (!trip) return '';
@@ -91,8 +105,14 @@ const PaymentPage = () => {
   const state = restoredState;
   const [method, setMethod] = useState('PayOS');
   const [dangThanhToan, setDangThanhToan] = useState(false);
+  const [payOsCheckoutUrl, setPayOsCheckoutUrl] = useState('');
+  const [payOsQrImage, setPayOsQrImage] = useState('');
+  const [payOsOrderCode, setPayOsOrderCode] = useState<number | null>(null);
+  const [payOsPaid, setPayOsPaid] = useState(false);
+  const [payOsStatusText, setPayOsStatusText] = useState('');
   const [remainingSeconds, setRemainingSeconds] = useState(() => calcInitialRemainingSeconds(restoredState.createdTickets));
   const timeoutHandledRef = useRef(false);
+  const paidRedirectHandledRef = useRef(false);
   const isCanceledByPayOs = searchParams.get('payos') === 'cancel';
 
   const totalAmount = Number(state.totalAmount || 0);
@@ -128,6 +148,7 @@ const PaymentPage = () => {
 
   useEffect(() => {
     if (!hasPaymentState) return;
+    if (payOsPaid) return;
     if (remainingSeconds > 0 || timeoutHandledRef.current) return;
     timeoutHandledRef.current = true;
     void (async () => {
@@ -146,7 +167,58 @@ const PaymentPage = () => {
         navigate('/', { replace: true });
       }
     })();
-  }, [hasPaymentState, navigate, remainingSeconds, state.createdTickets, state.customer?.phone]);
+  }, [hasPaymentState, navigate, payOsPaid, remainingSeconds, state.createdTickets, state.customer?.phone]);
+
+  useEffect(() => {
+    if (!payOsOrderCode || payOsPaid) return;
+    let active = true;
+    const tick = async () => {
+      try {
+        const { data } = await api.post<ApiResponse<PayOsConfirmResponse>>('/api/public/booking/payos/confirm', {
+          orderCode: payOsOrderCode,
+        });
+        const paid = Boolean(data?.data?.paid);
+        const paymentStatus = data?.data?.paymentStatus || 'PENDING';
+        if (!active) return;
+        if (paid) {
+          setPayOsPaid(true);
+          setPayOsStatusText('Thanh toán thành công.');
+          timeoutHandledRef.current = true;
+          try {
+            sessionStorage.removeItem(PAYMENT_STATE_STORAGE_KEY);
+          } catch {
+            // ignore storage errors
+          }
+          return;
+        }
+        setPayOsStatusText(`Đang chờ thanh toán... (trạng thái: ${paymentStatus})`);
+      } catch {
+        // ignore transient polling errors
+      }
+      if (active) {
+        window.setTimeout(tick, 4000);
+      }
+    };
+    void tick();
+    return () => {
+      active = false;
+    };
+  }, [payOsOrderCode, payOsPaid]);
+
+  useEffect(() => {
+    if (!payOsPaid || paidRedirectHandledRef.current) return;
+    paidRedirectHandledRef.current = true;
+    const highlightedTicketCodes = (state.createdTickets ?? [])
+      .map((t) => (t?.maVe ?? '').trim())
+      .filter((v) => v.length > 0);
+    const timeoutId = window.setTimeout(() => {
+      navigate('/tra-cuu-ve', {
+        replace: true,
+        state: highlightedTicketCodes.length > 0 ? { highlightedTicketCodes } : undefined,
+      });
+    }, 1200);
+    return () => window.clearTimeout(timeoutId);
+  }, [navigate, payOsPaid, state.createdTickets]);
 
   if (!hasPaymentState) {
     return (
@@ -182,7 +254,11 @@ const PaymentPage = () => {
           throw new Error('Không lấy được liên kết thanh toán');
         }
         sessionStorage.setItem(PAYMENT_STATE_STORAGE_KEY, JSON.stringify(state));
-        window.location.href = checkoutUrl;
+        setPayOsOrderCode(data?.data?.orderCode ?? null);
+        setPayOsPaid(false);
+        setPayOsStatusText('Đang chờ thanh toán...');
+        setPayOsCheckoutUrl(checkoutUrl);
+        setPayOsQrImage(resolvePayOsQrImage(data?.data?.qrCode, checkoutUrl));
       } catch (error) {
         const axiosErr = error as { response?: { data?: { message?: string } } };
         const msg = axiosErr.response?.data?.message || 'Không thể chuyển sang PayOS. Vui lòng thử lại.';
@@ -237,7 +313,7 @@ const PaymentPage = () => {
             )}
             <button
               type="button"
-              disabled={dangThanhToan || remainingSeconds <= 0 || isCanceledByPayOs}
+              disabled={dangThanhToan || remainingSeconds <= 0 || isCanceledByPayOs || payOsPaid}
               onClick={onFinish}
               className="mx-auto mt-2 block w-full max-w-xs rounded-full bg-[#ef5222] px-6 py-3 text-sm font-semibold text-white hover:bg-[#d84a1e] disabled:cursor-not-allowed disabled:opacity-70"
             >
@@ -254,6 +330,44 @@ const PaymentPage = () => {
               >
                 Thanh toán sau
               </button>
+            )}
+            {payOsCheckoutUrl && (
+              <div className="mt-4 rounded-xl border border-[#0e5a32]/20 bg-[#f0faf5] p-4 text-center">
+                <p className="text-sm font-semibold text-[#0e5a32]">Quét QR để thanh toán nhanh</p>
+                <img
+                  src={payOsQrImage}
+                  alt="QR thanh toán PayOS"
+                  className="mx-auto mt-3 h-52 w-52 rounded-lg border border-gray-200 bg-white p-2"
+                />
+                <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => window.open(payOsCheckoutUrl, '_blank', 'noopener,noreferrer')}
+                    className="rounded-full bg-[#ef5222] px-4 py-2 text-xs font-semibold text-white hover:bg-[#d84a1e]"
+                  >
+                    Mở trang PayOS
+                  </button>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      try {
+                        await navigator.clipboard.writeText(payOsCheckoutUrl);
+                        window.alert('Đã sao chép link thanh toán.');
+                      } catch {
+                        window.alert('Không thể sao chép link. Vui lòng copy thủ công.');
+                      }
+                    }}
+                    className="rounded-full border border-[#ef5222] bg-white px-4 py-2 text-xs font-semibold text-[#ef5222] hover:bg-[#fff0ea]"
+                  >
+                    Sao chép link
+                  </button>
+                </div>
+                {payOsStatusText && (
+                  <p className={`mt-3 text-sm font-semibold ${payOsPaid ? 'text-green-700' : 'text-[#0e5a32]'}`}>
+                    {payOsStatusText}
+                  </p>
+                )}
+              </div>
             )}
             <p className="mt-3 text-center text-sm font-medium text-[#0e5a32]">
               Bạn sẽ được chuyển đến cổng PayOS để hoàn tất thanh toán.
