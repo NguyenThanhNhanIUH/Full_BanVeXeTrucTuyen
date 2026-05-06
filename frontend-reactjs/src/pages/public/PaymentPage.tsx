@@ -208,17 +208,12 @@ const PaymentPage = () => {
   useEffect(() => {
     if (!payOsPaid || paidRedirectHandledRef.current) return;
     paidRedirectHandledRef.current = true;
-    const highlightedTicketCodes = (state.createdTickets ?? [])
-      .map((t) => (t?.maVe ?? '').trim())
-      .filter((v) => v.length > 0);
     const timeoutId = window.setTimeout(() => {
-      navigate('/tra-cuu-ve', {
-        replace: true,
-        state: highlightedTicketCodes.length > 0 ? { highlightedTicketCodes } : undefined,
-      });
+      const orderCodeParam = payOsOrderCode ? `?orderCode=${payOsOrderCode}` : '';
+      navigate(`/thanh-toan/ket-qua${orderCodeParam}`, { replace: true });
     }, 1200);
     return () => window.clearTimeout(timeoutId);
-  }, [navigate, payOsPaid, state.createdTickets]);
+  }, [navigate, payOsOrderCode, payOsPaid]);
 
   if (!hasPaymentState) {
     return (
