@@ -184,11 +184,6 @@ const PaymentPage = () => {
           setPayOsPaid(true);
           setPayOsStatusText('Thanh toán thành công.');
           timeoutHandledRef.current = true;
-          try {
-            sessionStorage.removeItem(PAYMENT_STATE_STORAGE_KEY);
-          } catch {
-            // ignore storage errors
-          }
           return;
         }
         setPayOsStatusText(`Đang chờ thanh toán... (trạng thái: ${paymentStatus})`);
