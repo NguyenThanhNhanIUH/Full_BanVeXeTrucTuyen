@@ -398,7 +398,6 @@ const LoginPage: React.FC = () => {
                       onChange={(e) => setEmail(e.target.value)}
                     />
                   </div>
-                  <p className="text-xs text-gray-500">(vui lòng kiểm tra thư rác)</p>
                   <input
                     type="text"
                     required
@@ -448,6 +447,7 @@ const LoginPage: React.FC = () => {
                   {err && <div className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{err}</div>}
                   {success && <div className="text-sm text-green-700 bg-green-50 border border-green-100 rounded-lg px-3 py-2">{success}</div>}
                   <p className="text-sm text-gray-600">Mã xác thực đã gửi tới: <span className="font-medium text-gray-800">{email}</span></p>
+                  <p className="text-xs text-gray-500">(vui lòng kiểm tra thư rác)</p>
                   <input
                     type="text"
                     inputMode="numeric"
