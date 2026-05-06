@@ -44,11 +44,14 @@ public class AuthService {
     private final Map<String, OtpData> passwordResetOtpStore = new ConcurrentHashMap<>();
     private final Set<String> verifiedResetEmails = ConcurrentHashMap.newKeySet();
 
-    @Value("${spring.mail.username:no-reply@banvexe.local}")
+    @Value("${app.mail.from:${spring.mail.username:no-reply@banvexe.local}}")
     private String fromEmail;
 
     @Value("${app.otp.expiration-minutes:5}")
     private long otpExpirationMinutes;
+
+    @Value("${app.otp.dev-mode:false}")
+    private boolean otpDevMode;
 
     public AuthService(
         UserAccountRepository userAccountRepository,
@@ -143,8 +146,8 @@ public class AuthService {
                 "Email hoặc số điện thoại trùng với tài khoản đã có trong hệ thống."
             );
         }
-        sendOtp(otpStore, email, "Xác thực email đăng ký tài khoản");
-        return new MessageResponse("Đăng ký thành công. Vui lòng kiểm tra email để lấy OTP xác thực.");
+        String otpCode = sendOtp(otpStore, email, "Xác thực email đăng ký tài khoản");
+        return new MessageResponse(buildOtpMessage("Đăng ký thành công. Vui lòng kiểm tra email để lấy OTP xác thực.", otpCode));
     }
 
     public MessageResponse resendOtp(EmailRequest request) {
@@ -156,8 +159,8 @@ public class AuthService {
             return new MessageResponse("Tài khoản đã xác thực trước đó.");
         }
 
-        sendOtp(otpStore, email, "Gửi lại OTP xác thực tài khoản");
-        return new MessageResponse("Đã gửi lại OTP qua email.");
+        String otpCode = sendOtp(otpStore, email, "Gửi lại OTP xác thực tài khoản");
+        return new MessageResponse(buildOtpMessage("Đã gửi lại OTP qua email.", otpCode));
     }
 
     @Transactional
@@ -194,11 +197,12 @@ public class AuthService {
 
     public MessageResponse requestPasswordResetOtp(EmailRequest request) {
         String email = normalizeEmail(request.email());
-        userAccountRepository.findByEmail(email).ifPresent(user -> 
-            sendOtp(passwordResetOtpStore, email, "Mã OTP đặt lại mật khẩu")
+        final String[] otpCode = new String[1];
+        userAccountRepository.findByEmail(email).ifPresent(user ->
+            otpCode[0] = sendOtp(passwordResetOtpStore, email, "Mã OTP đặt lại mật khẩu")
         );
         verifiedResetEmails.remove(email);
-        return new MessageResponse("Đã gửi mã xác thực qua email.");
+        return new MessageResponse(buildOtpMessage("Đã gửi mã xác thực qua email.", otpCode[0]));
     }
 
     public MessageResponse verifyPasswordResetOtp(VerifyEmailRequest request) {
@@ -284,10 +288,15 @@ public class AuthService {
         );
     }
 
-    private void sendOtp(Map<String, OtpData> store, String email, String subject) {
+    private String sendOtp(Map<String, OtpData> store, String email, String subject) {
         String otpCode = String.format("%06d", secureRandom.nextInt(1_000_000));
         LocalDateTime expiresAt = LocalDateTime.now().plusMinutes(otpExpirationMinutes);
         store.put(email, new OtpData(otpCode, expiresAt));
+
+        if (otpDevMode) {
+            System.out.println("OTP DEV MODE - " + email + ": " + otpCode);
+            return otpCode;
+        }
 
         try {
             SimpleMailMessage mail = new SimpleMailMessage();
@@ -297,10 +306,18 @@ public class AuthService {
             mail.setText("Xin chào,\n\nMã OTP xác thực tài khoản của bạn là: " + otpCode + "\n\nMã này sẽ hết hạn sau " + otpExpirationMinutes + " phút. Vui lòng không chia sẻ mã này cho bất kỳ ai.");
             mailSender.send(mail);
             System.out.println("Đã gửi email OTP thực tế đến: " + email);
+            return null;
         } catch (Exception e) {
             System.err.println("Gửi email thất bại: " + e.getMessage());
             throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Lỗi hệ thống: Không thể gửi email chứa mã OTP. Vui lòng thử lại sau.");
         }
+    }
+
+    private String buildOtpMessage(String baseMessage, String otpCode) {
+        if (!otpDevMode || otpCode == null || otpCode.isBlank()) {
+            return baseMessage;
+        }
+        return baseMessage + " [DEV OTP: " + otpCode + "]";
     }
 
     private String normalizeEmail(String email) {

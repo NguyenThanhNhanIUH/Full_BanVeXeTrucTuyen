@@ -52,11 +52,14 @@ cloudinary:
   api-secret: ${CLOUDINARY_API_SECRET:}
 
 app:
+  mail:
+    from: ${APP_MAIL_FROM:${SPRING_MAIL_USERNAME:no-reply@banvexe.local}}
   jwt:
     secret: ${APP_JWT_SECRET}
     expiration-minutes: ${APP_JWT_EXPIRATION_MINUTES:1440}
   otp:
     expiration-minutes: ${APP_OTP_EXPIRATION_MINUTES:5}
+    dev-mode: ${APP_OTP_DEV_MODE:false}
   expose-internal-error-message: ${APP_EXPOSE_INTERNAL_ERROR_MESSAGE:true}
   cors:
     allowed-origins: ${APP_CORS_ALLOWED_ORIGINS:http://localhost:5173}
