@@ -398,6 +398,7 @@ const LoginPage: React.FC = () => {
                       onChange={(e) => setEmail(e.target.value)}
                     />
                   </div>
+                  <p className="text-xs text-gray-500">(vui lòng kiểm tra thư rác)</p>
                   <input
                     type="text"
                     required
