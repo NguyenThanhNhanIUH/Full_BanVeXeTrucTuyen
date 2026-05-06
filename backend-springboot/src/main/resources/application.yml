@@ -54,6 +54,10 @@ cloudinary:
 app:
   mail:
     from: ${APP_MAIL_FROM:${SPRING_MAIL_USERNAME:no-reply@banvexe.local}}
+    from-name: ${APP_MAIL_FROM_NAME:BanVeXe}
+    mailjet:
+      api-key: ${APP_MAILJET_API_KEY:}
+      secret-key: ${APP_MAILJET_SECRET_KEY:}
   jwt:
     secret: ${APP_JWT_SECRET}
     expiration-minutes: ${APP_JWT_EXPIRATION_MINUTES:1440}

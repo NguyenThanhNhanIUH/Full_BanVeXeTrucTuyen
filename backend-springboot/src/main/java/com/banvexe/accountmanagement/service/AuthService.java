@@ -16,6 +16,11 @@ import com.banvexe.accountmanagement.repository.UserAccountRepository;
 import com.banvexe.accountmanagement.util.AccountView;
 import com.banvexe.accountmanagement.util.PhoneNumberUtil;
 import com.banvexe.accountmanagement.security.JwtService;
+import java.io.IOException;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.security.SecureRandom;
 import java.time.LocalDateTime;
 import java.util.Locale;
@@ -52,6 +57,17 @@ public class AuthService {
 
     @Value("${app.otp.dev-mode:false}")
     private boolean otpDevMode;
+
+    @Value("${app.mail.mailjet.api-key:}")
+    private String mailjetApiKey;
+
+    @Value("${app.mail.mailjet.secret-key:}")
+    private String mailjetSecretKey;
+
+    @Value("${app.mail.from-name:BanVeXe}")
+    private String fromName;
+
+    private final HttpClient httpClient = HttpClient.newHttpClient();
 
     public AuthService(
         UserAccountRepository userAccountRepository,
@@ -299,6 +315,12 @@ public class AuthService {
         }
 
         try {
+            if (isMailjetApiConfigured()) {
+                sendOtpViaMailjetApi(email, subject, otpCode);
+                System.out.println("Đã gửi email OTP qua Mailjet API đến: " + email);
+                return null;
+            }
+
             SimpleMailMessage mail = new SimpleMailMessage();
             mail.setFrom(fromEmail);
             mail.setTo(email);
@@ -318,6 +340,49 @@ public class AuthService {
             return baseMessage;
         }
         return baseMessage + " [DEV OTP: " + otpCode + "]";
+    }
+
+    private boolean isMailjetApiConfigured() {
+        return mailjetApiKey != null && !mailjetApiKey.isBlank() && mailjetSecretKey != null && !mailjetSecretKey.isBlank();
+    }
+
+    private void sendOtpViaMailjetApi(String email, String subject, String otpCode) throws IOException, InterruptedException {
+        String text = "Xin chào,\n\nMã OTP xác thực tài khoản của bạn là: " + otpCode
+            + "\n\nMã này sẽ hết hạn sau " + otpExpirationMinutes + " phút. Vui lòng không chia sẻ mã này cho bất kỳ ai.";
+
+        String jsonBody = "{"
+            + "\"Messages\":[{"
+            + "\"From\":{\"Email\":\"" + jsonEscape(fromEmail) + "\",\"Name\":\"" + jsonEscape(fromName) + "\"},"
+            + "\"To\":[{\"Email\":\"" + jsonEscape(email) + "\"}],"
+            + "\"Subject\":\"" + jsonEscape(subject) + "\","
+            + "\"TextPart\":\"" + jsonEscape(text) + "\""
+            + "}]"
+            + "}";
+
+        String authToken = java.util.Base64.getEncoder()
+            .encodeToString((mailjetApiKey + ":" + mailjetSecretKey).getBytes(java.nio.charset.StandardCharsets.UTF_8));
+
+        HttpRequest request = HttpRequest.newBuilder()
+            .uri(URI.create("https://api.mailjet.com/v3.1/send"))
+            .header("Content-Type", "application/json")
+            .header("Authorization", "Basic " + authToken)
+            .POST(HttpRequest.BodyPublishers.ofString(jsonBody))
+            .build();
+
+        HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+        int status = response.statusCode();
+        if (status < 200 || status >= 300) {
+            throw new IOException("Mailjet API error " + status + ": " + response.body());
+        }
+    }
+
+    private static String jsonEscape(String value) {
+        if (value == null) return "";
+        return value
+            .replace("\\", "\\\\")
+            .replace("\"", "\\\"")
+            .replace("\n", "\\n")
+            .replace("\r", "\\r");
     }
 
     private String normalizeEmail(String email) {
