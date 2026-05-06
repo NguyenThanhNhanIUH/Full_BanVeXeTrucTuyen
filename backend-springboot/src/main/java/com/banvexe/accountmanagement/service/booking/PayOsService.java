@@ -158,7 +158,12 @@ public class PayOsService {
             thanhToanRepository.save(tt);
         }
 
-        return new PayOsLinkResponse(orderCode, data.path("checkoutUrl").asText(), data.path("qrCode").asText(""));
+        String qrValue = firstNonBlank(
+            data.path("qrCodeUrl").asText(""),
+            data.path("qrCode").asText(""),
+            data.path("vietQR").asText("")
+        );
+        return new PayOsLinkResponse(orderCode, data.path("checkoutUrl").asText(), qrValue);
     }
 
     @Transactional
@@ -343,6 +348,16 @@ public class PayOsService {
 
     private String pendingKey(Long orderCode) {
         return PENDING_PREFIX + orderCode;
+    }
+
+    private String firstNonBlank(String... values) {
+        if (values == null) return "";
+        for (String value : values) {
+            if (value != null && !value.isBlank()) {
+                return value;
+            }
+        }
+        return "";
     }
 
     @SuppressWarnings("unchecked")
