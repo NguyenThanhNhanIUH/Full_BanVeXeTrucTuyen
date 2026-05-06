@@ -5,7 +5,12 @@ import com.banvexe.accountmanagement.entity.TicketStatus;
 import com.banvexe.accountmanagement.entity.VeXe;
 import com.banvexe.accountmanagement.repository.ChiTietVeRepository;
 import com.banvexe.accountmanagement.repository.VeXeRepository;
+import java.io.IOException;
 import java.math.BigDecimal;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.text.NumberFormat;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -46,12 +51,19 @@ public class BookingNotificationService {
     private final String websiteUrl;
     private final String ticketLookupUrl;
     private final String historyUrl;
+    private final String fromName;
+    private final String mailjetApiKey;
+    private final String mailjetSecretKey;
+    private final HttpClient httpClient = HttpClient.newHttpClient();
 
     public BookingNotificationService(
         JavaMailSender mailSender,
         VeXeRepository veXeRepository,
         ChiTietVeRepository chiTietVeRepository,
         @Value("${spring.mail.username:no-reply@banvexe.local}") String fromEmail,
+        @Value("${app.mail.from-name:BanVeXe}") String fromName,
+        @Value("${app.mail.mailjet.api-key:}") String mailjetApiKey,
+        @Value("${app.mail.mailjet.secret-key:}") String mailjetSecretKey,
         @Value("${app.booking.brand.name:BanVeXe}") String brandName,
         @Value("${app.booking.brand.logo-url:}") String logoUrl,
         @Value("${app.booking.brand.hotline:1900 1234}") String hotline,
@@ -77,6 +89,9 @@ public class BookingNotificationService {
         this.websiteUrl = websiteUrl;
         this.ticketLookupUrl = ticketLookupUrl;
         this.historyUrl = historyUrl;
+        this.fromName = fromName;
+        this.mailjetApiKey = mailjetApiKey;
+        this.mailjetSecretKey = mailjetSecretKey;
     }
 
     public void sendBookingSuccess(KhachHang khach, VeXe ticket) {
@@ -109,6 +124,10 @@ public class BookingNotificationService {
             String mailTo = to == null ? "" : to;
             String mailSubject = subject == null ? "" : subject;
             String mailBody = htmlBody == null ? "" : htmlBody;
+            if (isMailjetApiConfigured()) {
+                sendViaMailjetApi(from, mailTo, mailSubject, mailBody);
+                return;
+            }
             MimeMessage message = mailSender.createMimeMessage();
             MimeMessageHelper helper = new MimeMessageHelper(message, "UTF-8");
             helper.setFrom(from);
@@ -119,6 +138,45 @@ public class BookingNotificationService {
         } catch (Exception ex) {
             log.warn("Khong gui duoc email toi {}: {}", to, ex.getMessage());
         }
+    }
+
+    private boolean isMailjetApiConfigured() {
+        return mailjetApiKey != null && !mailjetApiKey.isBlank() && mailjetSecretKey != null && !mailjetSecretKey.isBlank();
+    }
+
+    private void sendViaMailjetApi(String from, String to, String subject, String htmlBody) throws IOException, InterruptedException {
+        String jsonBody = "{"
+            + "\"Messages\":[{"
+            + "\"From\":{\"Email\":\"" + jsonEscape(from) + "\",\"Name\":\"" + jsonEscape(fromName) + "\"},"
+            + "\"To\":[{\"Email\":\"" + jsonEscape(to) + "\"}],"
+            + "\"Subject\":\"" + jsonEscape(subject) + "\","
+            + "\"HTMLPart\":\"" + jsonEscape(htmlBody) + "\""
+            + "}]"
+            + "}";
+
+        String authToken = java.util.Base64.getEncoder()
+            .encodeToString((mailjetApiKey + ":" + mailjetSecretKey).getBytes(java.nio.charset.StandardCharsets.UTF_8));
+
+        HttpRequest request = HttpRequest.newBuilder()
+            .uri(URI.create("https://api.mailjet.com/v3.1/send"))
+            .header("Content-Type", "application/json")
+            .header("Authorization", "Basic " + authToken)
+            .POST(HttpRequest.BodyPublishers.ofString(jsonBody))
+            .build();
+
+        HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+        if (response.statusCode() < 200 || response.statusCode() >= 300) {
+            throw new IOException("Mailjet API error " + response.statusCode() + ": " + response.body());
+        }
+    }
+
+    private static String jsonEscape(String value) {
+        if (value == null) return "";
+        return value
+            .replace("\\", "\\\\")
+            .replace("\"", "\\\"")
+            .replace("\n", "\\n")
+            .replace("\r", "\\r");
     }
 
     private String buildBookingSuccessHtml(String fullName, List<TicketEmailRow> rows, BigDecimal total) {
