@@ -14,6 +14,12 @@ type PayOsConfirmResponse = {
   paid: boolean;
 };
 
+type PaymentState = {
+  createdTickets?: Array<{ maVe?: string | null }>;
+};
+
+const PAYMENT_STATE_STORAGE_KEY = 'banvexe_payment_state';
+
 const PaymentResultPage = () => {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -41,7 +47,39 @@ const PaymentResultPage = () => {
         if (data?.data?.paid) {
           setPaid(true);
           setMessage('Thanh toán thành công. Đang chuyển đến trang tra cứu vé...');
-          setTimeout(() => navigate('/tra-cuu-ve'), 1500);
+          // Try to prefill ticket code(s) from URL first, then fallback to sessionStorage.
+          let highlightedTicketCodes = (searchParams.get('ticketCodes') ?? '')
+            .split(',')
+            .map((v) => v.trim())
+            .filter((v) => v.length > 0);
+          try {
+            if (highlightedTicketCodes.length === 0) {
+              const raw = sessionStorage.getItem(PAYMENT_STATE_STORAGE_KEY);
+              if (raw) {
+                const st = JSON.parse(raw) as PaymentState;
+                highlightedTicketCodes = (st.createdTickets ?? [])
+                  .map((t) => (t?.maVe ?? '').trim())
+                  .filter((v) => v.length > 0);
+              }
+            }
+          } catch {
+            // ignore storage parse errors
+          }
+
+          // Clear cached payment state to avoid reusing stale tickets later.
+          try {
+            sessionStorage.removeItem(PAYMENT_STATE_STORAGE_KEY);
+          } catch {
+            // ignore
+          }
+
+          setTimeout(
+            () =>
+              navigate('/tra-cuu-ve', {
+                state: highlightedTicketCodes.length > 0 ? { highlightedTicketCodes } : undefined,
+              }),
+            1500
+          );
           return;
         }
         setMessage(`Thanh toán chưa thành công (trạng thái: ${data?.data?.paymentStatus || 'UNKNOWN'}).`);

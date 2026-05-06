@@ -204,11 +204,19 @@ const PaymentPage = () => {
     if (!payOsPaid || paidRedirectHandledRef.current) return;
     paidRedirectHandledRef.current = true;
     const timeoutId = window.setTimeout(() => {
-      const orderCodeParam = payOsOrderCode ? `?orderCode=${payOsOrderCode}` : '';
-      navigate(`/thanh-toan/ket-qua${orderCodeParam}`, { replace: true });
+      const params = new URLSearchParams();
+      if (payOsOrderCode) params.set('orderCode', String(payOsOrderCode));
+      const ticketCodes = (state.createdTickets ?? [])
+        .map((t) => (t?.maVe ?? '').trim())
+        .filter((v) => v.length > 0);
+      if (ticketCodes.length > 0) {
+        params.set('ticketCodes', ticketCodes.join(','));
+      }
+      const query = params.toString();
+      navigate(`/thanh-toan/ket-qua${query ? `?${query}` : ''}`, { replace: true });
     }, 1200);
     return () => window.clearTimeout(timeoutId);
-  }, [navigate, payOsOrderCode, payOsPaid]);
+  }, [navigate, payOsOrderCode, payOsPaid, state.createdTickets]);
 
   if (!hasPaymentState) {
     return (
