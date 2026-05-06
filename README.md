@@ -125,6 +125,11 @@ API mặc định: **http://localhost:8080**
 
 Tóm tắt: endpoint công khai gồm `/api/auth/register`, `/api/auth/login`, `/api/auth/verify-email`, `/api/auth/resend-otp`, `GET /api/accounts/health`, `GET /api/catalog/**`. Các API còn lại cần header `Authorization: Bearer <token>` và đúng vai trò (xem `SecurityConfig`).
 
+## Deploy giao diện (Firebase) + backend cho giảng viên test
+
+- **Hosting FE:** `https://banvexe-web-app-41f61.web.app`
+- **Hướng dẫn chi tiết:** [docs/DEPLOY_GV_TEST.md](docs/DEPLOY_GV_TEST.md) — Railway / Render, **`Dockerfile` gốc repo** (build JAR + copy `database/` cho seed), **`scripts/publish-firebase.ps1`** (build FE + Firebase khi đã có URL backend).
+
 ## Liên hệ
 
 - **Giáo viên hướng dẫn:** ThS. Đặng Văn Thuận  

@@ -1,0 +1,11 @@
+# Railway: Root directory = thư mục gốc repo (chứa Dockerfile này).
+# Add MySQL trong cùng project → biến JDBC xem docs/DEPLOY_GV_TEST.md
+
+[build]
+builder = "dockerfile"
+dockerfilePath = "Dockerfile"
+
+[deploy]
+healthcheckPath = "/api/accounts/health"
+healthcheckTimeout = 180
+restartPolicyType = "on_failure"

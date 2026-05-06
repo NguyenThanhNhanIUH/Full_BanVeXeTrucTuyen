@@ -1,0 +1,46 @@
+# Blueprint Render: https://render.com/docs/infrastructure-as-code
+# Sau khi connect repo GitHub/GitLab vào Render: New Blueprint → chọn repo → Render đọc file này.
+# Bạn vẫn phải tự tạo/tải DATABASE (MariaDB/MySQL) chỗ khác và điền biến môi trường trong Dashboard (Secrets).
+
+services:
+  - type: web
+    name: banvexe-backend
+    runtime: docker
+    plan: free
+    region: singapore
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /api/accounts/health
+    envVars:
+      - key: PORT
+        value: "8080"
+      - key: SPRING_JPA_HIBERNATE_DDL_AUTO
+        value: none
+      - key: APP_CORS_ALLOWED_ORIGINS
+        value: https://banvexe-web-app-41f61.web.app,https://banvexe-web-app-41f61.firebaseapp.com
+      - key: SPRING_DATASOURCE_URL
+        sync: false
+      - key: SPRING_DATASOURCE_USERNAME
+        sync: false
+      - key: SPRING_DATASOURCE_PASSWORD
+        sync: false
+      - key: APP_JWT_SECRET
+        sync: false
+      - key: SPRING_MAIL_HOST
+        value: smtp.gmail.com
+      - key: SPRING_MAIL_PORT
+        value: "587"
+      - key: SPRING_MAIL_USERNAME
+        sync: false
+      - key: SPRING_MAIL_PASSWORD
+        sync: false
+      - key: CLOUDINARY_CLOUD_NAME
+        sync: false
+      - key: CLOUDINARY_API_KEY
+        sync: false
+      - key: CLOUDINARY_API_SECRET
+        sync: false
+      - key: APP_PAYOS_DEV_MOCK
+        value: "true"
+      - key: APP_DB_SEED_SCRIPT
+        value: /database/data.sql
