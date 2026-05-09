@@ -61,6 +61,12 @@ const formatInstant = (value?: string) => {
   return `${d.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })} ${d.toLocaleDateString('vi-VN')}`;
 };
 
+const buildTicketQrUrl = (ticketCode?: string) => {
+  if (!ticketCode) return '';
+  const payload = `BANVEXE:${ticketCode}`;
+  return `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(payload)}`;
+};
+
 const TicketSearchPage = () => {
   const location = useLocation();
   const navigate = useNavigate();
@@ -376,6 +382,21 @@ const TicketSearchPage = () => {
                         {huyMessage && <span className="text-green-700">{huyMessage}</span>}
                         {huyError && <span className="text-red-600">{huyError}</span>}
                       </div>
+                    </div>
+                  </div>
+
+                  <div className="rounded-2xl border border-gray-200 bg-white p-4 md:col-span-2">
+                    <p className="text-sm text-gray-500">Mã QR vé</p>
+                    <div className="mt-3 flex flex-col items-center gap-3 rounded-xl bg-[#fafafa] p-4">
+                      <img
+                        src={buildTicketQrUrl(ticketResult.maVe)}
+                        alt={`QR ${ticketResult.maVe}`}
+                        className="h-44 w-44 rounded-lg border border-gray-200 bg-white p-2"
+                        loading="lazy"
+                      />
+                      <p className="text-xs text-gray-500">
+                        Nhân viên có thể quét QR hoặc nhập mã vé <span className="font-mono font-semibold">{ticketResult.maVe}</span>.
+                      </p>
                     </div>
                   </div>
                 </div>
