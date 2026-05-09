@@ -24,7 +24,14 @@ api.interceptors.response.use(
       clearAuth();
       const currentPath = typeof window !== 'undefined' ? window.location.pathname : '';
       const shouldStayOnLookupPage = currentPath === '/tra-cuu-ve';
-      if (typeof window !== 'undefined' && currentPath !== '/' && !shouldStayOnLookupPage) {
+      // Đăng nhập sai (401) hoặc tài khoản chưa kích hoạt (403) — không đẩy về trang chủ
+      const shouldStayOnLoginPage = currentPath === '/login';
+      if (
+        typeof window !== 'undefined' &&
+        currentPath !== '/' &&
+        !shouldStayOnLookupPage &&
+        !shouldStayOnLoginPage
+      ) {
         window.location.replace('/');
       }
     }
