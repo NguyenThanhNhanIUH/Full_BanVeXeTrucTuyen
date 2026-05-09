@@ -43,6 +43,11 @@ const CustomerChangePasswordPage = () => {
         setError('Mật khẩu xác nhận không khớp.');
         return;
       }
+      if (newPassword === oldPassword) {
+        setSaving(false);
+        setError('Mật khẩu mới phải khác mật khẩu hiện tại.');
+        return;
+      }
       try {
         const res = await api.put<ApiResponse<null>>('/api/accounts/me/password', {
           oldPassword,

@@ -80,6 +80,10 @@ public class AccountProfileService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Mật khẩu cũ không đúng");
         }
 
+        if (passwordService.matches(request.newPassword(), user.getPasswordHash())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Mật khẩu mới phải khác mật khẩu hiện tại");
+        }
+
         user.setPasswordHash(passwordService.encode(request.newPassword()));
         userAccountRepository.save(user);
     }

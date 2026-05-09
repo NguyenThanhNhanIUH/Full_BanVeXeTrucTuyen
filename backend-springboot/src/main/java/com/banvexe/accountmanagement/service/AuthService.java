@@ -252,6 +252,9 @@ public class AuthService {
 
         UserAccount user = userAccountRepository.findByEmail(email)
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Không tìm thấy tài khoản"));
+        if (passwordService.matches(request.newPassword(), user.getPasswordHash())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Mật khẩu mới phải khác mật khẩu hiện tại");
+        }
         user.setPasswordHash(passwordService.encode(request.newPassword()));
         userAccountRepository.save(user);
         verifiedResetEmails.remove(email);
