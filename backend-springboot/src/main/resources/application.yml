@@ -3,6 +3,10 @@
 spring:
   application:
     name: quan-ly-tai-khoan
+  # JWT + SecurityFilterChain — không dùng user/password mặc định của Boot (tránh log "generated security password").
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.security.servlet.UserDetailsServiceAutoConfiguration
   datasource:
     url: ${SPRING_DATASOURCE_URL:jdbc:mariadb://localhost:3306/QuanLyVeXe?createDatabaseIfNotExist=true&useUnicode=true&characterEncoding=utf8mb4&connectionCollation=utf8mb4_unicode_ci}
     driver-class-name: org.mariadb.jdbc.Driver

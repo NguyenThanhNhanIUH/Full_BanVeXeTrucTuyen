@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { LogIn, Lock, Mail, ArrowLeft } from 'lucide-react';
 import { api } from '../../api/client';
@@ -26,6 +26,7 @@ const LoginPage: React.FC = () => {
   const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
   const [sendingOtp, setSendingOtp] = useState(false);
+  const loginSubmitLock = useRef(false);
 
   const navigate = useNavigate();
   const location = useLocation();
@@ -190,6 +191,8 @@ const LoginPage: React.FC = () => {
 
   const onLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (loginSubmitLock.current) return;
+    loginSubmitLock.current = true;
     clearNotice();
     setLoading(true);
     try {
@@ -218,6 +221,7 @@ const LoginPage: React.FC = () => {
       const response = (e as { response?: { data?: { message?: string } } })?.response?.data;
       setErr(response?.message || 'Đăng nhập thất bại. Vui lòng kiểm tra lại email và mật khẩu.');
     } finally {
+      loginSubmitLock.current = false;
       setLoading(false);
     }
   };

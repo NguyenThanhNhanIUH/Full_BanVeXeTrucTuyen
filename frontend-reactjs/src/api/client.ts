@@ -15,30 +15,34 @@ function normalizePathname(pathname: string): string {
 }
 
 /**
- * Lỗi 401/403 từ các API mà người dùng gọi khi chưa đăng nhập (form đăng nhập/đăng ký/quên MK).
- * Không được `location.replace('/')` — đó là lỗi UX (đang ở trang đăng nhập mà bị đẩy về chủ).
+ * Lỗi 401/403 từ các API form đăng nhập/đăng ký/quên MK — không `location.replace('/')`.
+ * Dùng `axios.getUri` vì sau khi merge baseURL, `config.url` đôi khi không còn dạng `/api/auth/login`.
  */
-function isPublicAuthFormRequest(err: { config?: { url?: string; method?: string; baseURL?: string } }): boolean {
-  const method = (err.config?.method || 'get').toLowerCase();
+function isPublicAuthFormRequest(err: { config?: import('axios').InternalAxiosRequestConfig }): boolean {
+  const config = err.config;
+  if (!config) return false;
+  const method = (config.method || 'get').toLowerCase();
   if (method !== 'post') return false;
-  const raw = (err.config?.url || '').split('?')[0];
-  if (!raw) return false;
-  let path = raw;
-  if (raw.startsWith('http')) {
-    try {
-      path = new URL(raw).pathname;
-    } catch {
-      return false;
-    }
+  try {
+    const uri = axios.getUri(config);
+    const path = new URL(uri, 'http://localhost').pathname;
+    return (
+      path.includes('/api/auth/login') ||
+      path.includes('/api/auth/register') ||
+      path.includes('/api/auth/resend-otp') ||
+      path.includes('/api/auth/verify-email') ||
+      path.includes('/api/auth/forgot-password')
+    );
+  } catch {
+    const raw = `${config.baseURL || ''}${config.url || ''}`.split('?')[0];
+    return (
+      raw.includes('/api/auth/login') ||
+      raw.includes('/api/auth/register') ||
+      raw.includes('/api/auth/resend-otp') ||
+      raw.includes('/api/auth/verify-email') ||
+      raw.includes('/api/auth/forgot-password')
+    );
   }
-  return (
-    path === '/api/auth/login' ||
-    path.endsWith('/api/auth/login') ||
-    path.includes('/api/auth/register') ||
-    path.includes('/api/auth/resend-otp') ||
-    path.includes('/api/auth/verify-email') ||
-    path.includes('/api/auth/forgot-password/')
-  );
 }
 
 api.interceptors.request.use((config) => {
