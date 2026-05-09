@@ -1,5 +1,14 @@
-export const STATUSES = [
+/** Lọc danh sách + ô thống kê (không có «Hoàn thành» — vé đó xem ở «Tất cả») */
+export const TICKET_LIST_STATUSES = [
   'ALL',
+  'CHO_THANH_TOAN',
+  'DA_THANH_TOAN',
+  'DANG_XU_LY',
+  'DA_HUY',
+] as const;
+
+/** Trạng thái chọn trong form sửa vé */
+export const TICKET_EDIT_STATUSES = [
   'CHO_THANH_TOAN',
   'DA_THANH_TOAN',
   'DANG_XU_LY',

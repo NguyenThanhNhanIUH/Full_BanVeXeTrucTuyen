@@ -1,21 +1,10 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import {
-  RefreshCw,
-  Filter,
-  Layers,
-  Clock,
-  CheckCircle2,
-  Loader2,
-  Ban,
-  PartyPopper,
-  Pencil,
-  Search,
-} from 'lucide-react';
+import { RefreshCw, Layers, Clock, CheckCircle2, Loader2, Ban, Pencil, Search } from 'lucide-react';
 import { api } from '../../api/client';
 import { getStoredRole } from '../../auth/storage';
 import AdminPageStats from '../../components/admin/AdminPageStats';
 import AdminListPagination, { ADMIN_PAGE_SIZE } from '../../components/admin/AdminListPagination';
-import { STATUSES, STATUS_LABEL } from './ticketManagementConstants';
+import { TICKET_LIST_STATUSES, STATUS_LABEL } from './ticketManagementConstants';
 import type { PageData, TicketDetail, TicketEditFormState, TicketRow, TripOption } from './ticketManagementTypes';
 import TicketEditModal from './TicketEditModal';
 import {
@@ -31,7 +20,7 @@ import {
 
 const TicketManagement: React.FC = () => {
   const [page, setPage] = useState(0);
-  const [status, setStatus] = useState<(typeof STATUSES)[number]>('ALL');
+  const [status, setStatus] = useState<(typeof TICKET_LIST_STATUSES)[number]>('ALL');
   const [data, setData] = useState<PageData | null>(null);
   const [loading, setLoading] = useState(true);
   const [modalId, setModalId] = useState<number | null>(null);
@@ -59,7 +48,6 @@ const TicketManagement: React.FC = () => {
     daThanhToan: 0,
     dangXuLy: 0,
     daHuy: 0,
-    hoanThanh: 0,
   });
   const [ticketSearch, setTicketSearch] = useState('');
   const isStaff = getStoredRole() === 'NHAN_VIEN';
@@ -77,7 +65,6 @@ const TicketManagement: React.FC = () => {
           daThanhToan: Number(s.daThanhToan) || 0,
           dangXuLy: Number(s.dangXuLy) || 0,
           daHuy: Number(s.daHuy) || 0,
-          hoanThanh: Number(s.hoanThanh) || 0,
         });
       }
     } catch (e) {
@@ -315,24 +302,6 @@ const TicketManagement: React.FC = () => {
           Quản lý vé
         </h2>
         <div className="flex flex-wrap items-center gap-2">
-          <div className="flex items-center gap-2 text-sm text-gray-600">
-            <Filter size={16} />
-            <span>Trạng thái</span>
-            <select
-              className="border border-gray-300 rounded-lg px-2 py-1.5 text-sm bg-white"
-              value={status}
-              onChange={(e) => {
-                setPage(0);
-                setStatus(e.target.value as (typeof STATUSES)[number]);
-              }}
-            >
-              {STATUSES.map((s) => (
-                <option key={s} value={s}>
-                  {s === 'ALL' ? 'Tất cả' : STATUS_LABEL[s] || s}
-                </option>
-              ))}
-            </select>
-          </div>
           <button
             type="button"
             onClick={() => {
@@ -350,19 +319,24 @@ const TicketManagement: React.FC = () => {
       <AdminPageStats
         title="Thống kê vé toàn hệ thống"
         loading={statsLoading}
-        gridClassName="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4 mb-2"
+        gridClassName="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-4 mb-2"
+        activeActionKey={status}
+        onItemClick={(key) => {
+          setPage(0);
+          setStatus(key as (typeof TICKET_LIST_STATUSES)[number]);
+        }}
         items={[
-          { label: 'Tổng vé', value: ticketStats.total, icon: <Layers size={22} />, color: 'text-violet-600', bg: 'bg-violet-50', border: 'border-violet-200' },
-          { label: STATUS_LABEL.CHO_THANH_TOAN, value: ticketStats.choThanhToan, icon: <Clock size={22} />, color: 'text-amber-600', bg: 'bg-amber-50', border: 'border-amber-200' },
-          { label: STATUS_LABEL.DA_THANH_TOAN, value: ticketStats.daThanhToan, icon: <CheckCircle2 size={22} />, color: 'text-emerald-600', bg: 'bg-emerald-50', border: 'border-emerald-200' },
-          { label: STATUS_LABEL.DANG_XU_LY, value: ticketStats.dangXuLy, icon: <Loader2 size={22} />, color: 'text-sky-600', bg: 'bg-sky-50', border: 'border-sky-200' },
-          { label: STATUS_LABEL.DA_HUY, value: ticketStats.daHuy, icon: <Ban size={22} />, color: 'text-rose-600', bg: 'bg-rose-50', border: 'border-rose-200' },
-          { label: STATUS_LABEL.HOAN_THANH, value: ticketStats.hoanThanh, icon: <PartyPopper size={22} />, color: 'text-fuchsia-600', bg: 'bg-fuchsia-50', border: 'border-fuchsia-200' },
+          { label: 'Tổng vé', value: ticketStats.total, icon: <Layers size={22} />, color: 'text-violet-600', bg: 'bg-violet-50', border: 'border-violet-200', actionKey: 'ALL' },
+          { label: STATUS_LABEL.CHO_THANH_TOAN, value: ticketStats.choThanhToan, icon: <Clock size={22} />, color: 'text-amber-600', bg: 'bg-amber-50', border: 'border-amber-200', actionKey: 'CHO_THANH_TOAN' },
+          { label: STATUS_LABEL.DA_THANH_TOAN, value: ticketStats.daThanhToan, icon: <CheckCircle2 size={22} />, color: 'text-emerald-600', bg: 'bg-emerald-50', border: 'border-emerald-200', actionKey: 'DA_THANH_TOAN' },
+          { label: STATUS_LABEL.DANG_XU_LY, value: ticketStats.dangXuLy, icon: <Loader2 size={22} />, color: 'text-sky-600', bg: 'bg-sky-50', border: 'border-sky-200', actionKey: 'DANG_XU_LY' },
+          { label: STATUS_LABEL.DA_HUY, value: ticketStats.daHuy, icon: <Ban size={22} />, color: 'text-rose-600', bg: 'bg-rose-50', border: 'border-rose-200', actionKey: 'DA_HUY' },
         ]}
       />
-      <p className="text-sm text-slate-600 -mt-1 mb-1">
-        Ghi chú cập nhật theo từng dòng trên bảng. Vé vừa bị hủy/đổi trạng thái có thể nằm ở bộ lọc khác: dùng{" "}
-        <strong>Tất cả</strong> hoặc <strong>Đã hủy</strong> thay vì chỉ <strong>Đã thanh toán</strong>.
+      <p className="text-sm text-slate-600 mt-2 mb-1">
+        Ghi chú cập nhật theo từng dòng trên bảng. Vé trạng thái <strong>Hoàn thành</strong> chỉ hiện khi bấm{" "}
+        <strong>Tổng vé</strong> (tất cả). Vé vừa hủy/đổi trạng thái có thể nằm ô khác — dùng{" "}
+        <strong>Tổng vé</strong> hoặc <strong>Đã hủy</strong>.
       </p>
       {isStaff && (
         <p className="text-sm text-amber-800 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2 -mt-1 mb-1">

@@ -1,6 +1,6 @@
 import React from 'react';
 import { Ticket, Trash2 } from 'lucide-react';
-import { STATUSES, STATUS_LABEL } from './ticketManagementConstants';
+import { TICKET_EDIT_STATUSES, STATUS_LABEL } from './ticketManagementConstants';
 import type { TicketEditFormState, TripOption } from './ticketManagementTypes';
 
 type TicketEditModalProps = {
@@ -110,7 +110,7 @@ const TicketEditModal: React.FC<TicketEditModalProps> = ({
           required={!isStaff}
           disabled={detailLoad}
         >
-          {STATUSES.filter((s) => s !== 'ALL').map((s) => (
+          {TICKET_EDIT_STATUSES.map((s) => (
             <option key={s} value={s}>
               {STATUS_LABEL[s] || s}
             </option>
