@@ -30,8 +30,7 @@ const HelpBubble = () => {
     {
       id: 'welcome',
       role: 'bot',
-      text:
-        'Chào bạn! Hỏi mình điểm đi, điểm đến; có thể thêm tháng/năm hoặc hỏi khứ hồi (đi — về). Ví dụ: “Từ Đà Nẵng đi Cần Thơ tháng sau có chuyến không?” hoặc “Khứ hồi Huế — Sài Gòn, đi tháng 6 về tháng 6”.',
+      text: 'Nhập điểm đi, điểm đến để tôi hỗ trợ bạn tìm vé. Có thể thêm tháng/năm hoặc hỏi khứ hồi.',
     },
   ]);
 
@@ -140,7 +139,8 @@ const HelpBubble = () => {
                 }
               }}
               placeholder="Nhập điểm đi, điểm đến để tôi hỗ trợ bạn tìm vé"
-              className="flex-1 rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs outline-none focus:border-[#ef5222] focus:ring-2 focus:ring-[#ef5222]/15"
+              title="Gợi ý: thêm tháng/năm hoặc hỏi khứ hồi (đi — về)"
+              className="min-w-0 flex-1 rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs outline-none focus:border-[#ef5222] focus:ring-2 focus:ring-[#ef5222]/15"
             />
             <button
               type="button"
