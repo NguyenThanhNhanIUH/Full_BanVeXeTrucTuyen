@@ -1,6 +1,8 @@
 package com.banvexe.accountmanagement.service.booking;
 
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -85,6 +87,67 @@ class PayOsServiceWebhookTest {
         tx.setVeXe(ve);
 
         when(thanhToanRepository.findByMaGiaoDichForUpdate("PAYOS-PENDING-123456")).thenReturn(List.of(tx));
+
+        Map<String, Object> data = new HashMap<>();
+        data.put("orderCode", 123456L);
+        data.put("status", "PAID");
+        String signature = signWebhookData(data, "test-secret");
+        Map<String, Object> payload = new HashMap<>();
+        payload.put("data", data);
+        payload.put("signature", signature);
+
+        service.handleWebhook(payload);
+
+        verify(thanhToanRepository).save(tx);
+        verify(veXeRepository).save(ve);
+    }
+
+    @Test
+    void handleWebhook_pendingStatus_doesNotTouchDatabase() {
+        PayOsService service = new PayOsService(
+            veXeRepository,
+            thanhToanRepository,
+            khachHangRepository,
+            bookingNotificationService,
+            new ObjectMapper()
+        );
+        ReflectionTestUtils.setField(service, "checksumKey", "test-secret");
+
+        Map<String, Object> data = new HashMap<>();
+        data.put("orderCode", 123456L);
+        data.put("status", "PENDING");
+        String signature = signWebhookData(data, "test-secret");
+        Map<String, Object> payload = new HashMap<>();
+        payload.put("data", data);
+        payload.put("signature", signature);
+
+        service.handleWebhook(payload);
+
+        verify(thanhToanRepository, never()).findByMaGiaoDichForUpdate(anyString());
+        verify(thanhToanRepository, never()).save(any());
+        verify(veXeRepository, never()).save(any());
+    }
+
+    @Test
+    void handleWebhook_paid_loadsTxnsFromFailedPrefixWhenPendingGone() {
+        PayOsService service = new PayOsService(
+            veXeRepository,
+            thanhToanRepository,
+            khachHangRepository,
+            bookingNotificationService,
+            new ObjectMapper()
+        );
+        ReflectionTestUtils.setField(service, "checksumKey", "test-secret");
+
+        VeXe ve = new VeXe();
+        ve.setTrangThai(TicketStatus.CHO_THANH_TOAN);
+
+        ThanhToan tx = new ThanhToan();
+        tx.setTrangThai(PaymentTxnStatus.THAT_BAI);
+        tx.setVeXe(ve);
+
+        when(thanhToanRepository.findByMaGiaoDichForUpdate("PAYOS-PENDING-123456")).thenReturn(List.of());
+        when(thanhToanRepository.findByMaGiaoDichForUpdate("PAYOS-FAILED-123456")).thenReturn(List.of(tx));
 
         Map<String, Object> data = new HashMap<>();
         data.put("orderCode", 123456L);

@@ -25,6 +25,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.regex.Pattern;
 import java.util.stream.Stream;
 import java.util.stream.Collectors;
 import javax.crypto.Mac;
@@ -39,6 +40,8 @@ import org.springframework.web.server.ResponseStatusException;
 public class PayOsService {
 
     private static final String PENDING_PREFIX = "PAYOS-PENDING-";
+    private static final String FAILED_PREFIX = "PAYOS-FAILED-";
+    private static final Pattern PAYOS_FAIL_NOTE = Pattern.compile("\\s*\\|\\s*PayOS thất bại\\s*\\([^)]*\\)");
 
     private final VeXeRepository veXeRepository;
     private final ThanhToanRepository thanhToanRepository;
@@ -194,6 +197,25 @@ public class PayOsService {
         return new PayOsConfirmResponse(orderCode, status, paid);
     }
 
+    /**
+     * Giao dịch PayOS vẫn đang mở — không được coi là thất bại (tránh đổi maGiaoDich sang PAYOS-FAILED
+     * khi poll sớm lúc status còn PENDING, làm mất khóa PAYOS-PENDING và không bao giờ khớp khi PAID).
+     */
+    private boolean isPayOsStillInProgress(String status) {
+        String normalized = status == null ? "" : status.trim().toUpperCase(Locale.ROOT);
+        return normalized.isEmpty()
+            || normalized.equals("PENDING")
+            || normalized.equals("PROCESSING");
+    }
+
+    private List<ThanhToan> loadTxnsForFinalize(Long orderCode) {
+        List<ThanhToan> txns = thanhToanRepository.findByMaGiaoDichForUpdate(pendingKey(orderCode));
+        if (txns.isEmpty()) {
+            txns = thanhToanRepository.findByMaGiaoDichForUpdate(FAILED_PREFIX + orderCode);
+        }
+        return txns;
+    }
+
     @Transactional
     public void finalizeFromWebhook(Long orderCode, String status) {
         if (orderCode == null) return;
@@ -208,7 +230,11 @@ public class PayOsService {
     }
 
     private void finalizeOrder(Long orderCode, boolean paid, String status) {
-        List<ThanhToan> txns = thanhToanRepository.findByMaGiaoDichForUpdate(pendingKey(orderCode));
+        if (!paid && isPayOsStillInProgress(status)) {
+            return;
+        }
+
+        List<ThanhToan> txns = loadTxnsForFinalize(orderCode);
         if (txns.isEmpty()) return;
 
         boolean alreadyFinalSuccess = txns.stream().anyMatch(tt -> tt.getTrangThai() == PaymentTxnStatus.THANH_CONG);
@@ -225,7 +251,7 @@ public class PayOsService {
                 }
                 tt.setTrangThai(nextStatus);
                 tt.setNgayThanhToan(Instant.now());
-                tt.setMaGiaoDich((paid ? "PAYOS-" : "PAYOS-FAILED-") + orderCode);
+                tt.setMaGiaoDich((paid ? "PAYOS-" : FAILED_PREFIX) + orderCode);
                 thanhToanRepository.save(tt);
             }
 
@@ -233,6 +259,7 @@ public class PayOsService {
             if (ve != null) {
                 if (paid) {
                     ve.setTrangThai(TicketStatus.DA_THANH_TOAN);
+                    stripErroneousPayOsFailNote(ve);
                 } else if (ve.getTrangThai() != TicketStatus.DA_THANH_TOAN) {
                     ve.setTrangThai(TicketStatus.CHO_THANH_TOAN);
                 }
@@ -247,6 +274,15 @@ public class PayOsService {
         if (paid && hasTransitionToPaid) {
             notifyPaymentSuccessForOrder(txns, orderCode);
         }
+    }
+
+    private void stripErroneousPayOsFailNote(VeXe ve) {
+        String note = ve.getGhiChu();
+        if (note == null || !note.contains("PayOS thất bại")) {
+            return;
+        }
+        String cleaned = PAYOS_FAIL_NOTE.matcher(note).replaceAll("").trim();
+        ve.setGhiChu(cleaned.isEmpty() ? null : cleaned);
     }
 
     private void notifyPaymentSuccessForOrder(List<ThanhToan> txns, Long orderCode) {
