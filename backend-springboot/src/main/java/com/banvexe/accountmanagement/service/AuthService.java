@@ -218,12 +218,16 @@ public class AuthService {
 
     public MessageResponse requestPasswordResetOtp(EmailRequest request) {
         String email = normalizeEmail(request.email());
-        final String[] otpCode = new String[1];
-        userAccountRepository.findByEmail(email).ifPresent(user ->
-            otpCode[0] = sendOtp(passwordResetOtpStore, email, "Mã OTP đặt lại mật khẩu", OtpMailPurpose.PASSWORD_RESET)
-        );
+        userAccountRepository
+            .findByEmail(email)
+            .orElseThrow(
+                () ->
+                    new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "Không tìm thấy tài khoản với email này. Vui lòng kiểm tra lại hoặc đăng ký mới."));
+        String otpCode = sendOtp(passwordResetOtpStore, email, "Mã OTP đặt lại mật khẩu", OtpMailPurpose.PASSWORD_RESET);
         verifiedResetEmails.remove(email);
-        return new MessageResponse(buildOtpMessage("Đã gửi mã xác thực qua email.", otpCode[0]));
+        return new MessageResponse(buildOtpMessage("Đã gửi mã xác thực qua email.", otpCode));
     }
 
     public MessageResponse verifyPasswordResetOtp(VerifyEmailRequest request) {
