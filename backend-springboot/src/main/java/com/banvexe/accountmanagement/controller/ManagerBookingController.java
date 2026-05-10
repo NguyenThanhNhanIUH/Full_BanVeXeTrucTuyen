@@ -8,7 +8,8 @@ import com.banvexe.accountmanagement.dto.booking.CreateVehicleRequest;
 import com.banvexe.accountmanagement.dto.booking.ManagerFullTicketRequest;
 import com.banvexe.accountmanagement.dto.booking.ManagerTicketListItemDto;
 import com.banvexe.accountmanagement.dto.booking.ManagerTicketStatsDto;
-import com.banvexe.accountmanagement.dto.booking.RevenueReportDto;
+import com.banvexe.accountmanagement.dto.booking.MonthlyRevenuePointDto;
+import com.banvexe.accountmanagement.dto.booking.RevenueDailyReportDto;
 import com.banvexe.accountmanagement.dto.booking.ManagerTicketStatusRequest;
 import com.banvexe.accountmanagement.dto.booking.RouteSummaryDto;
 import com.banvexe.accountmanagement.dto.booking.StaffTicketDetailDto;
@@ -24,6 +25,8 @@ import com.banvexe.accountmanagement.service.booking.RevenueReportService;
 import com.banvexe.accountmanagement.service.booking.ManagerTripService;
 import com.banvexe.accountmanagement.service.booking.ManagerVehicleService;
 import jakarta.validation.Valid;
+import java.time.YearMonth;
+import java.time.format.DateTimeParseException;
 import java.util.List;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -92,9 +95,25 @@ public class ManagerBookingController {
         return ResponseEntity.ok(ApiResponse.success(managerTicketService.getTicketStats()));
     }
 
-    @GetMapping("/revenue/report")
-    public ResponseEntity<ApiResponse<RevenueReportDto>> getRevenueReport() {
-        return ResponseEntity.ok(ApiResponse.success(revenueReportService.buildReport()));
+    @GetMapping("/revenue/months")
+    public ResponseEntity<ApiResponse<List<MonthlyRevenuePointDto>>> listRevenueMonths() {
+        return ResponseEntity.ok(ApiResponse.success(revenueReportService.listMonthsWithRevenue()));
+    }
+
+    @GetMapping("/revenue/daily")
+    public ResponseEntity<ApiResponse<RevenueDailyReportDto>> getRevenueDaily(
+        @RequestParam("yearMonth") String yearMonthRaw
+    ) {
+        if (yearMonthRaw == null || yearMonthRaw.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Thiếu tham số yearMonth (định dạng yyyy-MM)");
+        }
+        YearMonth ym;
+        try {
+            ym = YearMonth.parse(yearMonthRaw.trim());
+        } catch (DateTimeParseException e) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "yearMonth không hợp lệ: " + yearMonthRaw);
+        }
+        return ResponseEntity.ok(ApiResponse.success(revenueReportService.buildDailyReport(ym)));
     }
 
     @GetMapping("/tickets")
