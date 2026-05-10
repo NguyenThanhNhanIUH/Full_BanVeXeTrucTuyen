@@ -22,6 +22,7 @@ import com.banvexe.accountmanagement.util.TicketGhiChuUtil;
 import java.math.BigDecimal;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 import org.hibernate.Hibernate;
@@ -70,7 +71,15 @@ public class ManagerTicketService {
         long c3 = veXeRepository.countByTrangThai(TicketStatus.DANG_XU_LY);
         long c4 = veXeRepository.countByTrangThai(TicketStatus.DA_HUY);
         long c5 = veXeRepository.countByTrangThai(TicketStatus.HOAN_THANH);
-        return new ManagerTicketStatsDto(total, c1, c2, c3, c4, c5);
+        BigDecimal revenueDaThu = Objects.requireNonNullElse(
+            veXeRepository.sumTongTienByTrangThaiIn(List.of(TicketStatus.DA_THANH_TOAN, TicketStatus.HOAN_THANH)),
+            BigDecimal.ZERO
+        );
+        BigDecimal revenueChoTT = Objects.requireNonNullElse(
+            veXeRepository.sumTongTienByTrangThai(TicketStatus.CHO_THANH_TOAN),
+            BigDecimal.ZERO
+        );
+        return new ManagerTicketStatsDto(total, c1, c2, c3, c4, c5, revenueDaThu, revenueChoTT);
     }
 
     @Transactional(readOnly = true)

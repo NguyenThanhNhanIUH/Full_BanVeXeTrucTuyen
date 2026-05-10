@@ -1,5 +1,7 @@
 package com.banvexe.accountmanagement.dto;
 
+import java.math.BigDecimal;
+
 public record DashboardStatsResponse(
     long customers,
     long staff,
@@ -12,6 +14,8 @@ public record DashboardStatsResponse(
     long lockedCustomers,
     long lockedStaff,
     /** Số bản ghi bảng KhachHang (hồ sơ), có thể khác số tài khoản KHACH_HANG. */
-    long totalKhachHang
+    long totalKhachHang,
+    BigDecimal revenueDaThu,
+    BigDecimal revenueChoThanhToan
 ) {
 }

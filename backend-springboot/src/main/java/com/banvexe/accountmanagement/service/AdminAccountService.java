@@ -15,6 +15,7 @@ import com.banvexe.accountmanagement.dto.UpdateStaffRequest;
 import com.banvexe.accountmanagement.dto.UpdateStaffStatusRequest;
 import com.banvexe.accountmanagement.entity.AccountStatus;
 import com.banvexe.accountmanagement.entity.KhachHang;
+import com.banvexe.accountmanagement.entity.TicketStatus;
 import com.banvexe.accountmanagement.entity.UserAccount;
 import com.banvexe.accountmanagement.entity.UserAccount.UserRole;
 import com.banvexe.accountmanagement.entity.VeXe;
@@ -25,6 +26,7 @@ import com.banvexe.accountmanagement.repository.UserAccountRepository;
 import com.banvexe.accountmanagement.repository.VeXeRepository;
 import com.banvexe.accountmanagement.repository.XeRepository;
 import com.banvexe.accountmanagement.util.PhoneNumberUtil;
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
@@ -81,9 +83,17 @@ public class AdminAccountService {
         long tickets = veXeRepository.count();
         long vehicles = xeRepository.count();
         long totalKhachHang = khachHangRepository.count();
+        BigDecimal revenueDaThu = Objects.requireNonNullElse(
+            veXeRepository.sumTongTienByTrangThaiIn(List.of(TicketStatus.DA_THANH_TOAN, TicketStatus.HOAN_THANH)),
+            BigDecimal.ZERO
+        );
+        BigDecimal revenueChoTT = Objects.requireNonNullElse(
+            veXeRepository.sumTongTienByTrangThai(TicketStatus.CHO_THANH_TOAN),
+            BigDecimal.ZERO
+        );
         return new DashboardStatsResponse(
             customers, staff, locked, customers + staff, routes, trips, tickets, vehicles, lockedCustomers, lockedStaff,
-            totalKhachHang);
+            totalKhachHang, revenueDaThu, revenueChoTT);
     }
 
     public PageResponse<CustomerSummaryResponse> listCustomers(String search, int page, int size) {
