@@ -10,6 +10,7 @@ import CustomerAccountManagement from './pages/admin/CustomerAccountManagement';
 import RouteManagement from './pages/admin/RouteManagement';
 import TripManagement from './pages/admin/TripManagement';
 import TicketManagement from './pages/admin/TicketManagement';
+import RevenuePage from './pages/admin/RevenuePage';
 import VehicleManagement from './pages/admin/VehicleManagement';
 import CancelRequestsPage from './pages/admin/CancelRequestsPage';
 
@@ -73,6 +74,7 @@ function App() {
           <Route path='routes' element={<RouteManagement />} />
           <Route path='trips' element={<TripManagement />} />
           <Route path='tickets' element={<TicketManagement />} />
+          <Route path='revenue' element={<RevenuePage />} />
           <Route
             path='vehicles'
             element={

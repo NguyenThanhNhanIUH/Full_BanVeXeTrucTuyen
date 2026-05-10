@@ -2,7 +2,6 @@ package com.banvexe.accountmanagement.repository;
 
 import com.banvexe.accountmanagement.entity.TicketStatus;
 import com.banvexe.accountmanagement.entity.VeXe;
-import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
@@ -18,11 +17,8 @@ public interface VeXeRepository extends JpaRepository<VeXe, Integer> {
 
     long countByTrangThai(TicketStatus trangThai);
 
-    @Query("select coalesce(sum(v.tongTien), 0) from VeXe v where v.trangThai = :st")
-    BigDecimal sumTongTienByTrangThai(@Param("st") TicketStatus st);
-
-    @Query("select coalesce(sum(v.tongTien), 0) from VeXe v where v.trangThai in :statuses")
-    BigDecimal sumTongTienByTrangThaiIn(@Param("statuses") Collection<TicketStatus> statuses);
+    @Query("select v.ngayDat, v.tongTien from VeXe v where v.trangThai in :statuses")
+    List<Object[]> findNgayDatAndTongTienByTrangThaiIn(@Param("statuses") Collection<TicketStatus> statuses);
 
     boolean existsByMaVeAndIdNot(String maVe, Integer id);
 

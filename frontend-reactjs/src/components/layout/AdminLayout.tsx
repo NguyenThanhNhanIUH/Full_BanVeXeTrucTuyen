@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { Users, LogOut, Menu, Bell, Bus, MapPin, BusFront, Ticket, Truck, UserCircle2, Ban } from 'lucide-react';
+import { Users, LogOut, Menu, Bell, Bus, MapPin, BusFront, Ticket, Truck, UserCircle2, Ban, BarChart3 } from 'lucide-react';
 import { clearAuth, getStoredEmail, getStoredRole } from '../../auth/storage';
 
 const AdminLayout: React.FC = () => {
@@ -20,6 +20,7 @@ const AdminLayout: React.FC = () => {
       { name: 'Tuyến xe', path: '/admin/routes', icon: <MapPin size={20} /> },
       { name: 'Chuyến xe', path: '/admin/trips', icon: <BusFront size={20} /> },
       { name: 'Vé', path: '/admin/tickets', icon: <Ticket size={20} /> },
+      { name: 'Doanh thu', path: '/admin/revenue', icon: <BarChart3 size={20} /> },
       { name: 'Quản lý xe', path: '/admin/vehicles', icon: <Truck size={20} />, managerOnly: true },
     ];
     if (isManager) {

@@ -13,8 +13,6 @@ import {
   RefreshCw,
   Activity,
   Users,
-  Wallet,
-  PiggyBank,
 } from 'lucide-react';
 import { api } from '../../api/client';
 import AdminPageStats from '../../components/admin/AdminPageStats';
@@ -49,11 +47,6 @@ type RawAccount = {
 const getErrorMessage = (error: unknown, fallback: string) =>
   (error as { response?: { data?: { message?: string } } })?.response?.data?.message || fallback;
 
-const formatVnd = (amount: number) =>
-  new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND', maximumFractionDigits: 0 }).format(
-    Number.isFinite(amount) ? Math.round(amount) : 0,
-  );
-
 const AccountManagement: React.FC = () => {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [loading, setLoading] = useState(true);
@@ -70,8 +63,6 @@ const AccountManagement: React.FC = () => {
     lockedCustomers: 0,
     lockedStaff: 0,
     total: 0,
-    revenueDaThu: 0,
-    revenueChoThanhToan: 0,
   });
   const [tablePage, setTablePage] = useState(0);
   const [accountTab, setAccountTab] = useState<'STAFF' | 'CUSTOMER'>('STAFF');
@@ -102,8 +93,6 @@ const AccountManagement: React.FC = () => {
           lockedCustomers: d.lockedCustomers != null ? toNum(d.lockedCustomers) : 0,
           lockedStaff: d.lockedStaff != null ? toNum(d.lockedStaff) : 0,
           total: d.total != null ? toNum(d.total) : c + s,
-          revenueDaThu: d.revenueDaThu != null ? toNum(d.revenueDaThu) : 0,
-          revenueChoThanhToan: d.revenueChoThanhToan != null ? toNum(d.revenueChoThanhToan) : 0,
         });
       }
     } catch (e) {
@@ -387,31 +376,6 @@ const AccountManagement: React.FC = () => {
           { label: 'Khách bị khóa', value: stats.lockedCustomers, icon: <AlertCircle size={22} />, color: 'text-rose-600', bg: 'bg-rose-50', border: 'border-rose-100', actionKey: 'customer-locked' },
           { label: 'Nhân viên bị khóa', value: stats.lockedStaff, icon: <AlertCircle size={22} />, color: 'text-orange-600', bg: 'bg-orange-50', border: 'border-orange-100', actionKey: 'staff-locked' },
           { label: 'Tổng tài khoản (KH + NV)', value: stats.total, icon: <Users size={22} />, color: 'text-gray-600', bg: 'bg-gray-50', border: 'border-gray-100', actionKey: 'total-accounts' },
-        ]}
-      />
-
-      <AdminPageStats
-        title="Doanh thu vé (toàn hệ thống)"
-        loading={statsLoading}
-        className="mb-2"
-        gridClassName="grid grid-cols-1 md:grid-cols-2 gap-4 mb-2"
-        items={[
-          {
-            label: 'Đã thu (đã thanh toán + hoàn thành)',
-            value: formatVnd(stats.revenueDaThu),
-            icon: <Wallet size={22} />,
-            color: 'text-emerald-600',
-            bg: 'bg-emerald-50',
-            border: 'border-emerald-200',
-          },
-          {
-            label: 'Chưa thu (chờ thanh toán)',
-            value: formatVnd(stats.revenueChoThanhToan),
-            icon: <PiggyBank size={22} />,
-            color: 'text-amber-600',
-            bg: 'bg-amber-50',
-            border: 'border-amber-200',
-          },
         ]}
       />
 

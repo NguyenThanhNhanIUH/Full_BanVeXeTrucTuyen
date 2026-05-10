@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { RefreshCw, Layers, Clock, CheckCircle2, Loader2, Ban, Pencil, Search, Wallet, PiggyBank } from 'lucide-react';
+import { RefreshCw, Layers, Clock, CheckCircle2, Loader2, Ban, Pencil, Search } from 'lucide-react';
 import { api } from '../../api/client';
 import { getStoredRole } from '../../auth/storage';
 import AdminPageStats from '../../components/admin/AdminPageStats';
@@ -17,11 +17,6 @@ import {
   parseGheList,
   pickGhiChuFromRow,
 } from './ticketManagementUtils';
-
-const formatVnd = (amount: number) =>
-  new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND', maximumFractionDigits: 0 }).format(
-    Number.isFinite(amount) ? Math.round(amount) : 0,
-  );
 
 const TicketManagement: React.FC = () => {
   const [page, setPage] = useState(0);
@@ -53,8 +48,6 @@ const TicketManagement: React.FC = () => {
     daThanhToan: 0,
     dangXuLy: 0,
     daHuy: 0,
-    revenueDaThu: 0,
-    revenueChoThanhToan: 0,
   });
   const [ticketSearch, setTicketSearch] = useState('');
   const isStaff = getStoredRole() === 'NHAN_VIEN';
@@ -72,8 +65,6 @@ const TicketManagement: React.FC = () => {
           daThanhToan: Number(s.daThanhToan) || 0,
           dangXuLy: Number(s.dangXuLy) || 0,
           daHuy: Number(s.daHuy) || 0,
-          revenueDaThu: Number(s.revenueDaThu) || 0,
-          revenueChoThanhToan: Number(s.revenueChoThanhToan) || 0,
         });
       }
     } catch (e) {
@@ -340,31 +331,6 @@ const TicketManagement: React.FC = () => {
           { label: STATUS_LABEL.DA_THANH_TOAN, value: ticketStats.daThanhToan, icon: <CheckCircle2 size={22} />, color: 'text-emerald-600', bg: 'bg-emerald-50', border: 'border-emerald-200', actionKey: 'DA_THANH_TOAN' },
           { label: STATUS_LABEL.DANG_XU_LY, value: ticketStats.dangXuLy, icon: <Loader2 size={22} />, color: 'text-sky-600', bg: 'bg-sky-50', border: 'border-sky-200', actionKey: 'DANG_XU_LY' },
           { label: STATUS_LABEL.DA_HUY, value: ticketStats.daHuy, icon: <Ban size={22} />, color: 'text-rose-600', bg: 'bg-rose-50', border: 'border-rose-200', actionKey: 'DA_HUY' },
-        ]}
-      />
-
-      <AdminPageStats
-        title="Doanh thu (tổng tiền vé theo trạng thái)"
-        loading={statsLoading}
-        className="mt-2"
-        gridClassName="grid grid-cols-1 md:grid-cols-2 gap-4 mb-2"
-        items={[
-          {
-            label: 'Đã thu (đã thanh toán + hoàn thành)',
-            value: formatVnd(ticketStats.revenueDaThu),
-            icon: <Wallet size={22} />,
-            color: 'text-emerald-600',
-            bg: 'bg-emerald-50',
-            border: 'border-emerald-200',
-          },
-          {
-            label: 'Chưa thu (chờ thanh toán)',
-            value: formatVnd(ticketStats.revenueChoThanhToan),
-            icon: <PiggyBank size={22} />,
-            color: 'text-amber-600',
-            bg: 'bg-amber-50',
-            border: 'border-amber-200',
-          },
         ]}
       />
 

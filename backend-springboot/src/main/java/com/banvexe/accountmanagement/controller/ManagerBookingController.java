@@ -8,6 +8,7 @@ import com.banvexe.accountmanagement.dto.booking.CreateVehicleRequest;
 import com.banvexe.accountmanagement.dto.booking.ManagerFullTicketRequest;
 import com.banvexe.accountmanagement.dto.booking.ManagerTicketListItemDto;
 import com.banvexe.accountmanagement.dto.booking.ManagerTicketStatsDto;
+import com.banvexe.accountmanagement.dto.booking.RevenueReportDto;
 import com.banvexe.accountmanagement.dto.booking.ManagerTicketStatusRequest;
 import com.banvexe.accountmanagement.dto.booking.RouteSummaryDto;
 import com.banvexe.accountmanagement.dto.booking.StaffTicketDetailDto;
@@ -19,6 +20,7 @@ import com.banvexe.accountmanagement.dto.booking.VehicleSummaryDto;
 import com.banvexe.accountmanagement.entity.TicketStatus;
 import com.banvexe.accountmanagement.service.booking.ManagerRouteService;
 import com.banvexe.accountmanagement.service.booking.ManagerTicketService;
+import com.banvexe.accountmanagement.service.booking.RevenueReportService;
 import com.banvexe.accountmanagement.service.booking.ManagerTripService;
 import com.banvexe.accountmanagement.service.booking.ManagerVehicleService;
 import jakarta.validation.Valid;
@@ -45,17 +47,20 @@ public class ManagerBookingController {
     private final ManagerTripService managerTripService;
     private final ManagerTicketService managerTicketService;
     private final ManagerVehicleService managerVehicleService;
+    private final RevenueReportService revenueReportService;
 
     public ManagerBookingController(
         ManagerRouteService managerRouteService,
         ManagerTripService managerTripService,
         ManagerTicketService managerTicketService,
-        ManagerVehicleService managerVehicleService
+        ManagerVehicleService managerVehicleService,
+        RevenueReportService revenueReportService
     ) {
         this.managerRouteService = managerRouteService;
         this.managerTripService = managerTripService;
         this.managerTicketService = managerTicketService;
         this.managerVehicleService = managerVehicleService;
+        this.revenueReportService = revenueReportService;
     }
 
     @GetMapping("/vehicles")
@@ -85,6 +90,11 @@ public class ManagerBookingController {
     @GetMapping("/tickets/stats")
     public ResponseEntity<ApiResponse<ManagerTicketStatsDto>> getTicketStats() {
         return ResponseEntity.ok(ApiResponse.success(managerTicketService.getTicketStats()));
+    }
+
+    @GetMapping("/revenue/report")
+    public ResponseEntity<ApiResponse<RevenueReportDto>> getRevenueReport() {
+        return ResponseEntity.ok(ApiResponse.success(revenueReportService.buildReport()));
     }
 
     @GetMapping("/tickets")
