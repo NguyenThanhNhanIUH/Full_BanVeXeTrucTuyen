@@ -139,7 +139,7 @@ const HelpBubble = () => {
                   void sendMessage();
                 }
               }}
-              placeholder="Nhập câu hỏi..."
+              placeholder="Nhập điểm đi, điểm đến để tôi hỗ trợ bạn tìm vé"
               className="flex-1 rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs outline-none focus:border-[#ef5222] focus:ring-2 focus:ring-[#ef5222]/15"
             />
             <button
