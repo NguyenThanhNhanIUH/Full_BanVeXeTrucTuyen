@@ -30,7 +30,8 @@ const HelpBubble = () => {
     {
       id: 'welcome',
       role: 'bot',
-      text: 'Bạn cần tra cứu chuyến nào? Ví dụ: “tháng 6 có chuyến từ TP. Hồ Chí Minh đến Nha Trang không?”',
+      text:
+        'Chào bạn! Hỏi mình điểm đi, điểm đến; có thể thêm tháng/năm hoặc hỏi khứ hồi (đi — về). Ví dụ: “Từ Đà Nẵng đi Cần Thơ tháng sau có chuyến không?” hoặc “Khứ hồi Huế — Sài Gòn, đi tháng 6 về tháng 6”.',
     },
   ]);
 

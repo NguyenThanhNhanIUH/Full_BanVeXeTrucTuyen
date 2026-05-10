@@ -114,6 +114,7 @@ INSERT INTO Xe (bien_so, loai_xe, so_ghe) VALUES
 ('51B-222.10', 'Limosine 11 chỗ', 11),
 ('51B-999.11', 'Ghế 28 chỗ', 28);
 
+-- Tuyến chiều đi (id 1–20)
 INSERT INTO TuyenXe (ten_tuyen, diem_di, diem_den, khoang_cach, thoi_gian_du_kien, gia_ve_co_ban, trang_thai) VALUES
 ('Huế - TP. Hồ Chí Minh', 'Thừa Thiên Huế', 'TP. Hồ Chí Minh', 1080.00, 1000, 320000.00, 'ACTIVE'),
 ('Đà Nẵng - TP. Hồ Chí Minh', 'Đà Nẵng', 'TP. Hồ Chí Minh', 850.00, 900, 300000.00, 'ACTIVE'),
@@ -134,7 +135,10 @@ INSERT INTO TuyenXe (ten_tuyen, diem_di, diem_den, khoang_cach, thoi_gian_du_kie
 ('Sa Huỳnh - Tiền Giang', 'Sa Huỳnh (Quảng Ngãi)', 'Tiền Giang', 850.00, 900, 300000.00, 'ACTIVE'),
 ('Quảng Ngãi - Cần Thơ', 'Quảng Ngãi', 'Cần Thơ', 800.00, 880, 300000.00, 'ACTIVE'),
 ('Huế - Vũng Tàu', 'Thừa Thiên Huế', 'Vũng Tàu', 950.00, 920, 325000.00, 'ACTIVE'),
-('Tuy Hòa - TP. Hồ Chí Minh', 'Tuy Hòa', 'TP. Hồ Chí Minh', 560.00, 640, 270000.00, 'ACTIVE'),
+('Tuy Hòa - TP. Hồ Chí Minh', 'Tuy Hòa', 'TP. Hồ Chí Minh', 560.00, 640, 270000.00, 'ACTIVE');
+
+-- Chiều về / đối chiều (id 21–40 khớp cặp lần lượt với id 1–20; 41–44: Đà Lạt & Cà Mau — đặt khứ hồi = hai chuyến, hai vé)
+INSERT INTO TuyenXe (ten_tuyen, diem_di, diem_den, khoang_cach, thoi_gian_du_kien, gia_ve_co_ban, trang_thai) VALUES
 ('TP. Hồ Chí Minh - Thừa Thiên Huế', 'TP. Hồ Chí Minh', 'Thừa Thiên Huế', 1080.00, 1000, 320000.00, 'ACTIVE'),
 ('TP. Hồ Chí Minh - Đà Nẵng', 'TP. Hồ Chí Minh', 'Đà Nẵng', 850.00, 900, 300000.00, 'ACTIVE'),
 ('Cần Thơ - Hội An', 'Cần Thơ', 'Hội An', 1200.00, 1100, 350000.00, 'ACTIVE'),
@@ -307,3 +311,16 @@ INSERT INTO ChiTietVe (ve_xe_id, so_ghe) VALUES
 INSERT INTO ThanhToan (ve_xe_id, so_tien, phuong_thuc, ma_giao_dich, trang_thai) VALUES
 (1, 640000.00, 'VI_DIEN_TU', 'MOMO123456789', 'THANH_CONG'),
 (3, 350000.00, 'CHUYEN_KHOAN', 'FT2026061998877', 'THANH_CONG');
+
+-- Thêm xe (id tự tăng sau 3 xe mẫu đầu; biển số UNIQUE)
+INSERT INTO Xe (bien_so, loai_xe, so_ghe) VALUES
+('51B-301.01', 'Giường nằm 40 chỗ', 40),
+('51B-302.02', 'Giường nằm 22 chỗ', 22),
+('51C-401.10', 'Limousine 9 chỗ', 9),
+('51C-402.11', 'Limousine 16 chỗ', 16),
+('51D-501.20', 'Ghế 40 chỗ', 40),
+('51D-502.21', 'Ghế 22 chỗ', 22),
+('51D-503.30', 'Giường nằm 46 chỗ', 46),
+('51F-601.40', 'Limousine 11 chỗ', 11),
+('51F-602.41', 'Ghế 34 chỗ', 34),
+('51F-603.50', 'Giường nằm 34 chỗ', 34);

@@ -70,16 +70,37 @@ public class AssistantChatService {
         }
         ExtractedQuery query = extractQuery(question);
         if (query.origin() == null || query.origin().isBlank() || query.destination() == null || query.destination().isBlank()) {
-            return new AssistantChatResponse("Bạn cho mình biết điểm đi và điểm đến nhé (vd: từ TP. Hồ Chí Minh đến Nha Trang).");
+            return new AssistantChatResponse(
+                "Bạn cho mình biết điểm đi và điểm đến nhé. Có thể hỏi một chiều hoặc khứ hồi, kèm tháng/năm nếu cần lọc.");
         }
 
         String origin = resolveLocation(query.origin(), true);
         String destination = resolveLocation(query.destination(), false);
 
-        List<TripSummaryDto> trips = bookingCatalogService.searchTrips(origin, destination, null, 1);
-        List<TripSummaryDto> filtered = filterByMonth(trips, query.month(), query.year());
+        List<TripSummaryDto> outbound = bookingCatalogService.searchTrips(origin, destination, null, 1);
+        List<TripSummaryDto> outboundFiltered = filterByMonth(outbound, query.month(), query.year());
 
-        String answer = buildAnswer(origin, destination, filtered, query.month(), query.year());
+        if (!query.roundTrip()) {
+            String answer = buildAnswer(origin, destination, outboundFiltered, query.month(), query.year(), false);
+            return new AssistantChatResponse(answer);
+        }
+
+        Integer retMonth = query.monthReturn() != null ? query.monthReturn() : query.month();
+        Integer retYear = query.yearReturn() != null ? query.yearReturn() : query.year();
+
+        List<TripSummaryDto> inbound = bookingCatalogService.searchTrips(destination, origin, null, 1);
+        List<TripSummaryDto> inboundFiltered = filterByMonth(inbound, retMonth, retYear);
+
+        String answer = buildRoundTripAnswer(
+            origin,
+            destination,
+            outboundFiltered,
+            inboundFiltered,
+            query.month(),
+            query.year(),
+            retMonth,
+            retYear
+        );
         return new AssistantChatResponse(answer);
     }
 
@@ -104,20 +125,18 @@ public class AssistantChatService {
             .toList();
     }
 
-    private String buildAnswer(String origin, String destination, List<TripSummaryDto> trips, Integer month, Integer year) {
-        if (trips.isEmpty()) {
-            String whenText = month != null
-                ? "trong tháng " + month + (year != null ? "/" + year : "")
-                : "trong thời gian sắp tới";
-            return "Không tìm thấy chuyến phù hợp cho " + origin + " → " + destination + " " + whenText + ". Bạn thử đổi ngày hoặc tuyến khác nhé.";
+    private String whenClause(Integer month, Integer year) {
+        if (month != null) {
+            return "trong tháng " + month + (year != null ? "/" + year : "");
         }
-        String whenText = month != null
-            ? "trong tháng " + month + (year != null ? "/" + year : "")
-            : "trong thời gian sắp tới";
-        StringBuilder sb = new StringBuilder();
-        sb.append("Có ").append(trips.size()).append(" chuyến ").append(origin).append(" → ")
-            .append(destination).append(" ").append(whenText).append(":");
-        int count = Math.min(5, trips.size());
+        if (year != null) {
+            return "trong năm " + year;
+        }
+        return "trong thời gian sắp tới";
+    }
+
+    private void appendTripLines(StringBuilder sb, List<TripSummaryDto> trips, int maxLines) {
+        int count = Math.min(maxLines, trips.size());
         for (int i = 0; i < count; i++) {
             TripSummaryDto t = trips.get(i);
             sb.append("\n- ")
@@ -132,6 +151,78 @@ public class AssistantChatService {
             if (t.soGheTrong() > 0) {
                 sb.append(" | Còn ").append(t.soGheTrong()).append(" ghế");
             }
+        }
+        if (trips.size() > maxLines) {
+            sb.append("\n- … và ").append(trips.size() - maxLines).append(" chuyến khác (xem thêm trên trang đặt vé).");
+        }
+    }
+
+    private String buildAnswer(
+        String origin,
+        String destination,
+        List<TripSummaryDto> trips,
+        Integer month,
+        Integer year,
+        boolean roundTripHint
+    ) {
+        if (trips.isEmpty()) {
+            String whenText = whenClause(month, year);
+            String suffix = roundTripHint
+                ? " Bạn có thể hỏi thêm chiều về (" + destination + " → " + origin + ") nếu cần khứ hồi."
+                : "";
+            return "Không tìm thấy chuyến phù hợp cho " + origin + " → " + destination + " " + whenText
+                + ". Bạn thử đổi ngày hoặc tuyến khác nhé." + suffix;
+        }
+        String whenText = whenClause(month, year);
+        StringBuilder sb = new StringBuilder();
+        sb.append("Có ").append(trips.size()).append(" chuyến ").append(origin).append(" → ")
+            .append(destination).append(" ").append(whenText).append(":");
+        appendTripLines(sb, trips, 5);
+        return sb.toString();
+    }
+
+    private String buildRoundTripAnswer(
+        String origin,
+        String destination,
+        List<TripSummaryDto> outbound,
+        List<TripSummaryDto> inbound,
+        Integer monthOut,
+        Integer yearOut,
+        Integer monthRet,
+        Integer yearRet
+    ) {
+        String whenOut = whenClause(monthOut, yearOut);
+        String whenRet = whenClause(monthRet, yearRet);
+        boolean sameWhen = java.util.Objects.equals(monthOut, monthRet) && java.util.Objects.equals(yearOut, yearRet);
+
+        StringBuilder sb = new StringBuilder();
+        sb.append("Khứ hồi ").append(origin).append(" ⇄ ").append(destination);
+        if (sameWhen && monthOut != null) {
+            sb.append(" (").append(whenOut).append("):");
+        } else {
+            sb.append(" — Chiều đi ").append(whenOut).append(", chiều về ").append(whenRet).append(":");
+        }
+
+        if (outbound.isEmpty()) {
+            sb.append("\n\nChiều đi: không có chuyến ").append(origin).append(" → ").append(destination).append(" ")
+                .append(whenOut).append(".");
+        } else {
+            sb.append("\n\nChiều đi (").append(outbound.size()).append(" chuyến):");
+            appendTripLines(sb, outbound, 4);
+        }
+
+        if (inbound.isEmpty()) {
+            sb.append("\n\nChiều về: không có chuyến ").append(destination).append(" → ").append(origin).append(" ")
+                .append(whenRet).append(".");
+        } else {
+            sb.append("\n\nChiều về (").append(inbound.size()).append(" chuyến):");
+            appendTripLines(sb, inbound, 4);
+        }
+
+        if (!outbound.isEmpty() && !inbound.isEmpty()) {
+            sb.append("\n\nTrên web bạn chọn “Khứ hồi”, chọn chuyến và ghế từng chiều rồi thanh toán một lần.");
+        } else if (outbound.isEmpty() && inbound.isEmpty()) {
+            sb.append("\n\nBạn thử đổi tháng hoặc đổi cặp điểm — hệ thống lưu tuyến chiều về riêng cho nhiều cặp thành phố.");
         }
         return sb.toString();
     }
@@ -184,16 +275,33 @@ public class AssistantChatService {
             String destination = asText(node, "destination");
             Integer month = asInt(node, "month");
             Integer year = asInt(node, "year");
-            return new ExtractedQuery(origin, destination, month, year);
+            boolean roundTrip = asBoolean(node, "roundTrip");
+            Integer monthReturn = asInt(node, "monthReturn");
+            Integer yearReturn = asInt(node, "yearReturn");
+            return new ExtractedQuery(origin, destination, month, year, roundTrip, monthReturn, yearReturn);
         } catch (Exception e) {
-            return new ExtractedQuery(null, null, null, null);
+            return new ExtractedQuery(null, null, null, null, false, null, null);
         }
     }
 
     private String buildPrompt(String question) {
-        return "Trich xuat diem di va diem den tu cau hoi ve tim chuyen xe. "
-            + "Tra ve JSON duy nhat theo mau: {\"origin\":string|null,\"destination\":string|null,\"month\":number|null,\"year\":number|null}. "
-            + "Khong giai thich. Cau hoi: \"" + question.replace("\"", "'") + "\"";
+        return """
+            Ban la bo trich xuat thong tin dat ve xe khach tu cau hoi tieng Viet.
+            Tra ve DUY NHAT mot object JSON (khong markdown, khong giai thich), dung schema:
+            {"origin":string|null,"destination":string|null,"month":number|null,"year":number|null,\
+            "roundTrip":boolean,"monthReturn":number|null,"yearReturn":number|null}
+
+            Quy tac:
+            - origin = noi xuat phat / diem don; destination = noi den / diem tra.
+            - month/year: thoi gian chuyen DI (uu tien). Neu khach noi "thang sau", "thang 6 toi" hay suy ra theo ngay hom nay.
+            - roundTrip = true neu khach hoi khu hoi, ve khu hoi, hai chieu, di va ve, co chieu ve, book ca di lan ve, \
+            "tu A den B roi ve lai A", tro ve, ngay ve (kem chuyen di).
+            - monthReturn/yearReturn: thang/nam rieng cho chuyen VE neu khach noi ro (vd "di thang 6 ve thang 7"); \
+            neu khong noi rieng thi de null (he thong se dung cung thang/nam voi chuyen di neu co).
+            - Neu cau khong lien quan tim chuyen, van tra JSON voi origin/destination null.
+
+            Cau hoi: "%s"
+            """.formatted(question.replace("\"", "'").replace("\n", " "));
     }
 
     private String callGemini(String prompt) {
@@ -206,7 +314,7 @@ public class AssistantChatService {
         parts.addObject().put("text", prompt);
         ObjectNode config = root.putObject("generationConfig");
         config.put("temperature", 0.2);
-        config.put("maxOutputTokens", 256);
+        config.put("maxOutputTokens", 384);
 
         try {
             String body = objectMapper.writeValueAsString(root);
@@ -273,6 +381,24 @@ public class AssistantChatService {
         return value != null && !value.isBlank() ? value.trim() : null;
     }
 
+    private boolean asBoolean(JsonNode node, String field) {
+        if (node == null || node.get(field) == null || node.get(field).isNull()) {
+            return false;
+        }
+        JsonNode value = node.get(field);
+        if (value.isBoolean()) {
+            return value.asBoolean();
+        }
+        if (value.isTextual()) {
+            String t = value.asText().trim().toLowerCase(Locale.ROOT);
+            return "true".equals(t) || "1".equals(t) || "yes".equals(t) || "co".equals(t);
+        }
+        if (value.isNumber()) {
+            return value.asInt() != 0;
+        }
+        return false;
+    }
+
     private Integer asInt(JsonNode node, String field) {
         if (node == null || node.get(field) == null || node.get(field).isNull()) {
             return null;
@@ -308,6 +434,14 @@ public class AssistantChatService {
         return formatter.format(value != null ? value : BigDecimal.ZERO);
     }
 
-    private record ExtractedQuery(String origin, String destination, Integer month, Integer year) {
+    private record ExtractedQuery(
+        String origin,
+        String destination,
+        Integer month,
+        Integer year,
+        boolean roundTrip,
+        Integer monthReturn,
+        Integer yearReturn
+    ) {
     }
 }
