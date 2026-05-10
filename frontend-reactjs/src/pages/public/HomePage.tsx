@@ -271,6 +271,12 @@ const HomePage = () => {
     }
   };
 
+  const ensureTripPanelOpen = (tripId: number) => {
+    if (tripDangChonGhe !== tripId) {
+      void toggleChonGhe(tripId);
+    }
+  };
+
   const onSelectSeat = (tripId: number, seat: SeatStatus) => {
     if (seat.daBan) return;
     setTripDangNoiBatId(tripId);
@@ -824,6 +830,7 @@ const HomePage = () => {
                       soDoGheTheoChuyen={soDoGheTheoChuyen}
                       gheDangChonTheoChuyen={gheDangChonTheoChuyen}
                       onToggleSeatPanel={toggleChonGhe}
+                      onEnsureTripPanelOpen={ensureTripPanelOpen}
                       onSelectSeat={onSelectSeat}
                       onChooseTrip={onChooseTrip}
                       tripType={tripType}

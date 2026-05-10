@@ -274,7 +274,6 @@ const RevenuePage: React.FC = () => {
               <p className="mt-2 text-4xl font-extrabold tabular-nums text-gray-900">
                 {chartBusy ? '…' : totalTickets.toLocaleString('vi-VN')}
               </p>
-              <p className="mt-2 text-sm text-gray-500">Khớp với biểu đồ: vé đã thanh toán + hoàn thành trong tháng.</p>
             </div>
             <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-600 ring-1 ring-emerald-100">
               <Ticket size={26} />
@@ -290,7 +289,6 @@ const RevenuePage: React.FC = () => {
               <p className="mt-2 break-words text-3xl font-extrabold tabular-nums text-gray-900 sm:text-4xl">
                 {chartBusy ? '…' : formatVnd(totalRevenue)}
               </p>
-              <p className="mt-2 text-sm text-gray-500">Tổng tiền các ngày trong tháng đã chọn.</p>
             </div>
             <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-[#fff0eb] text-[#ef5222] ring-1 ring-[#ffdbcf]">
               <Wallet size={26} />
