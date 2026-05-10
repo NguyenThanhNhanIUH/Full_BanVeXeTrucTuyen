@@ -23,15 +23,17 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.security.SecureRandom;
 import java.time.LocalDateTime;
+import java.nio.charset.StandardCharsets;
 import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.Set;
+import jakarta.mail.internet.InternetAddress;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
-import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
+import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
@@ -66,6 +68,9 @@ public class AuthService {
 
     @Value("${app.mail.from-name:BanVeXe}")
     private String fromName;
+
+    @Value("${app.mail.reply-to:}")
+    private String replyTo;
 
     private final HttpClient httpClient = HttpClient.newHttpClient();
 
@@ -162,7 +167,7 @@ public class AuthService {
                 "Email hoặc số điện thoại trùng với tài khoản đã có trong hệ thống."
             );
         }
-        String otpCode = sendOtp(otpStore, email, "Xác thực email đăng ký tài khoản");
+        String otpCode = sendOtp(otpStore, email, "Xác thực email đăng ký tài khoản", OtpMailPurpose.REGISTER);
         return new MessageResponse(buildOtpMessage("Đăng ký thành công. Vui lòng kiểm tra email để lấy OTP xác thực.", otpCode));
     }
 
@@ -175,7 +180,7 @@ public class AuthService {
             return new MessageResponse("Tài khoản đã xác thực trước đó.");
         }
 
-        String otpCode = sendOtp(otpStore, email, "Gửi lại OTP xác thực tài khoản");
+        String otpCode = sendOtp(otpStore, email, "Gửi lại OTP xác thực tài khoản", OtpMailPurpose.REGISTER);
         return new MessageResponse(buildOtpMessage("Đã gửi lại OTP qua email.", otpCode));
     }
 
@@ -215,7 +220,7 @@ public class AuthService {
         String email = normalizeEmail(request.email());
         final String[] otpCode = new String[1];
         userAccountRepository.findByEmail(email).ifPresent(user ->
-            otpCode[0] = sendOtp(passwordResetOtpStore, email, "Mã OTP đặt lại mật khẩu")
+            otpCode[0] = sendOtp(passwordResetOtpStore, email, "Mã OTP đặt lại mật khẩu", OtpMailPurpose.PASSWORD_RESET)
         );
         verifiedResetEmails.remove(email);
         return new MessageResponse(buildOtpMessage("Đã gửi mã xác thực qua email.", otpCode[0]));
@@ -307,7 +312,7 @@ public class AuthService {
         );
     }
 
-    private String sendOtp(Map<String, OtpData> store, String email, String subject) {
+    private String sendOtp(Map<String, OtpData> store, String email, String subject, OtpMailPurpose purpose) {
         String otpCode = String.format("%06d", secureRandom.nextInt(1_000_000));
         LocalDateTime expiresAt = LocalDateTime.now().plusMinutes(otpExpirationMinutes);
         store.put(email, new OtpData(otpCode, expiresAt));
@@ -317,19 +322,27 @@ public class AuthService {
             return otpCode;
         }
 
+        String fullSubject = brandedSubject(subject);
+        String plain = buildOtpPlainBody(otpCode, purpose);
+        String html = buildOtpHtmlBody(otpCode, purpose);
+
         try {
             if (isMailjetApiConfigured()) {
-                sendOtpViaMailjetApi(email, subject, otpCode);
+                sendOtpViaMailjetApi(email, fullSubject, plain, html);
                 System.out.println("Đã gửi email OTP qua Mailjet API đến: " + email);
                 return null;
             }
 
-            SimpleMailMessage mail = new SimpleMailMessage();
-            mail.setFrom(fromEmail);
-            mail.setTo(email);
-            mail.setSubject(subject);
-            mail.setText("Xin chào,\n\nMã OTP xác thực tài khoản của bạn là: " + otpCode + "\n\nMã này sẽ hết hạn sau " + otpExpirationMinutes + " phút. Vui lòng không chia sẻ mã này cho bất kỳ ai.");
-            mailSender.send(mail);
+            var mime = mailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(mime, true, StandardCharsets.UTF_8.name());
+            helper.setFrom(new InternetAddress(fromEmail, displayFromName(), StandardCharsets.UTF_8.name()));
+            helper.setTo(email);
+            helper.setSubject(fullSubject);
+            if (replyTo != null && !replyTo.isBlank()) {
+                helper.setReplyTo(replyTo.trim());
+            }
+            helper.setText(plain, html);
+            mailSender.send(mime);
             System.out.println("Đã gửi email OTP thực tế đến: " + email);
             return null;
         } catch (Exception e) {
@@ -349,16 +362,21 @@ public class AuthService {
         return mailjetApiKey != null && !mailjetApiKey.isBlank() && mailjetSecretKey != null && !mailjetSecretKey.isBlank();
     }
 
-    private void sendOtpViaMailjetApi(String email, String subject, String otpCode) throws IOException, InterruptedException {
-        String text = "Xin chào,\n\nMã OTP xác thực tài khoản của bạn là: " + otpCode
-            + "\n\nMã này sẽ hết hạn sau " + otpExpirationMinutes + " phút. Vui lòng không chia sẻ mã này cho bất kỳ ai.";
+    private void sendOtpViaMailjetApi(String email, String subject, String textPart, String htmlPart)
+        throws IOException, InterruptedException {
+        String replyBlock = "";
+        if (replyTo != null && !replyTo.isBlank()) {
+            replyBlock = ",\"ReplyTo\":{\"Email\":\"" + jsonEscape(replyTo.trim()) + "\"}";
+        }
 
         String jsonBody = "{"
             + "\"Messages\":[{"
-            + "\"From\":{\"Email\":\"" + jsonEscape(fromEmail) + "\",\"Name\":\"" + jsonEscape(fromName) + "\"},"
+            + "\"From\":{\"Email\":\"" + jsonEscape(fromEmail) + "\",\"Name\":\"" + jsonEscape(displayFromName()) + "\"},"
             + "\"To\":[{\"Email\":\"" + jsonEscape(email) + "\"}],"
             + "\"Subject\":\"" + jsonEscape(subject) + "\","
-            + "\"TextPart\":\"" + jsonEscape(text) + "\""
+            + "\"TextPart\":\"" + jsonEscape(textPart) + "\","
+            + "\"HTMLPart\":\"" + jsonEscape(htmlPart) + "\""
+            + replyBlock
             + "}]"
             + "}";
 
@@ -386,6 +404,64 @@ public class AuthService {
             .replace("\"", "\\\"")
             .replace("\n", "\\n")
             .replace("\r", "\\r");
+    }
+
+    private String displayFromName() {
+        return fromName == null || fromName.isBlank() ? "BanVeXe" : fromName.trim();
+    }
+
+    private String brandedSubject(String subject) {
+        String name = displayFromName();
+        return "[" + name + "] " + subject;
+    }
+
+    private String buildOtpPlainBody(String otpCode, OtpMailPurpose purpose) {
+        String brand = displayFromName();
+        return "Xin chào,\n\n"
+            + "Bạn đang thực hiện: " + purpose.actionLine + ".\n"
+            + "Mã OTP của bạn là: " + otpCode + "\n\n"
+            + "Mã có hiệu lực trong " + otpExpirationMinutes
+            + " phút. Không chia sẻ mã cho bất kỳ ai.\n\n"
+            + "---\n"
+            + "Email tự động từ " + brand + ". Nếu bạn không yêu cầu thao tác này, vui lòng bỏ qua email.\n";
+    }
+
+    private String buildOtpHtmlBody(String otpCode, OtpMailPurpose purpose) {
+        String brand = htmlEscape(displayFromName());
+        String action = htmlEscape(purpose.actionLine);
+        String code = htmlEscape(otpCode);
+        return "<!DOCTYPE html><html lang=\"vi\"><head><meta charset=\"UTF-8\"/></head>"
+            + "<body style=\"font-family:system-ui,-apple-system,sans-serif;line-height:1.5;color:#333;\">"
+            + "<p>Xin chào,</p>"
+            + "<p>Bạn đang thực hiện: <strong>" + action + "</strong>.</p>"
+            + "<p>Mã OTP của bạn là: <strong style=\"font-size:1.25rem;letter-spacing:0.12em;\">" + code + "</strong></p>"
+            + "<p>Mã có hiệu lực trong <strong>" + otpExpirationMinutes + "</strong> phút. "
+            + "Không chia sẻ mã cho bất kỳ ai.</p>"
+            + "<hr style=\"border:none;border-top:1px solid #e5e5e5;margin:1.25rem 0\"/>"
+            + "<p style=\"font-size:12px;color:#666\">Email tự động từ " + brand
+            + ". Nếu bạn không yêu cầu thao tác này, vui lòng bỏ qua email.</p>"
+            + "</body></html>";
+    }
+
+    private static String htmlEscape(String s) {
+        if (s == null) {
+            return "";
+        }
+        return s.replace("&", "&amp;")
+            .replace("<", "&lt;")
+            .replace(">", "&gt;")
+            .replace("\"", "&quot;");
+    }
+
+    private enum OtpMailPurpose {
+        REGISTER("xác thực đăng ký tài khoản"),
+        PASSWORD_RESET("đặt lại mật khẩu");
+
+        private final String actionLine;
+
+        OtpMailPurpose(String actionLine) {
+            this.actionLine = actionLine;
+        }
     }
 
     private String normalizeEmail(String email) {

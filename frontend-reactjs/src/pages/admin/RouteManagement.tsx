@@ -35,6 +35,7 @@ const RouteManagement: React.FC = () => {
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
   const [routeSearch, setRouteSearch] = useState('');
+  const [routeStatusFilter, setRouteStatusFilter] = useState<'ALL' | 'ACTIVE' | 'INACTIVE'>('ALL');
   const [tablePage, setTablePage] = useState(0);
   const isStaff = getStoredRole() === 'NHAN_VIEN';
 
@@ -151,7 +152,11 @@ const RouteManagement: React.FC = () => {
 
   const displayRoutes = useMemo(() => {
     const q = routeSearch.trim().toLowerCase();
-    const sorted = [...list].sort((a, b) => a.id - b.id);
+    let base = list;
+    if (routeStatusFilter !== 'ALL') {
+      base = list.filter((r) => r.trangThai === routeStatusFilter);
+    }
+    const sorted = [...base].sort((a, b) => a.id - b.id);
     if (!q) return sorted;
     return sorted.filter((r) => {
       const hay = [
@@ -169,11 +174,11 @@ const RouteManagement: React.FC = () => {
         .toLowerCase();
       return hay.includes(q);
     });
-  }, [list, routeSearch]);
+  }, [list, routeSearch, routeStatusFilter]);
 
   useEffect(() => {
     setTablePage(0);
-  }, [routeSearch]);
+  }, [routeSearch, routeStatusFilter]);
 
   const routeTotalPages = displayRoutes.length === 0 ? 0 : Math.max(1, Math.ceil(displayRoutes.length / ADMIN_PAGE_SIZE));
 
@@ -218,10 +223,12 @@ const RouteManagement: React.FC = () => {
       <AdminPageStats
         title="Thống kê tuyến"
         loading={loading}
+        activeActionKey={routeStatusFilter}
+        onItemClick={(key) => setRouteStatusFilter(key as 'ALL' | 'ACTIVE' | 'INACTIVE')}
         items={[
-          { label: 'Tổng tuyến', value: routeStats.total, icon: <Layers size={22} />, color: 'text-amber-600', bg: 'bg-amber-50', border: 'border-amber-200' },
-          { label: 'Đang hoạt động (ACTIVE)', value: routeStats.active, icon: <CheckCircle size={22} />, color: 'text-emerald-600', bg: 'bg-emerald-50', border: 'border-emerald-200' },
-          { label: 'Ngừng hoạt động (INACTIVE)', value: routeStats.inactive, icon: <Ban size={22} />, color: 'text-slate-600', bg: 'bg-slate-100', border: 'border-slate-200' },
+          { label: 'Tổng tuyến', value: routeStats.total, icon: <Layers size={22} />, color: 'text-amber-600', bg: 'bg-amber-50', border: 'border-amber-200', actionKey: 'ALL' },
+          { label: 'Đang hoạt động (ACTIVE)', value: routeStats.active, icon: <CheckCircle size={22} />, color: 'text-emerald-600', bg: 'bg-emerald-50', border: 'border-emerald-200', actionKey: 'ACTIVE' },
+          { label: 'Ngừng hoạt động (INACTIVE)', value: routeStats.inactive, icon: <Ban size={22} />, color: 'text-slate-600', bg: 'bg-slate-100', border: 'border-slate-200', actionKey: 'INACTIVE' },
         ]}
         gridClassName="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-2"
       />
@@ -229,7 +236,8 @@ const RouteManagement: React.FC = () => {
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
         <div className="flex flex-col gap-2 border-b border-gray-100 bg-gray-50/60 px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-xs text-gray-600">
-            Khớp lọc: <span className="font-semibold text-gray-800">{displayRoutes.length}</span> / {list.length} tuyến (mỗi trang {ADMIN_PAGE_SIZE})
+            Khớp lọc: <span className="font-semibold text-gray-800">{displayRoutes.length}</span> / {list.length} tuyến
+            {routeStatusFilter !== 'ALL' ? ` (${routeStatusFilter})` : ''} (mỗi trang {ADMIN_PAGE_SIZE})
           </p>
           <div className="relative w-full sm:max-w-sm">
             <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
@@ -274,7 +282,11 @@ const RouteManagement: React.FC = () => {
               ) : displayRoutes.length === 0 ? (
                 <tr>
                   <td colSpan={isStaff ? 10 : 11} className="px-4 py-8 text-center text-gray-500">
-                    Không có tuyến khớp &quot;{routeSearch}&quot;.
+                    {routeSearch.trim()
+                      ? `Không có tuyến khớp "${routeSearch}".`
+                      : routeStatusFilter !== 'ALL'
+                        ? `Không có tuyến ${routeStatusFilter}. Bấm "Tổng tuyến" để xem tất cả.`
+                        : 'Không có tuyến khớp bộ lọc.'}
                   </td>
                 </tr>
               ) : (

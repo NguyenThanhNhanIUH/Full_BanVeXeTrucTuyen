@@ -16,6 +16,7 @@ type PayOsConfirmResponse = {
 
 type PaymentState = {
   createdTickets?: Array<{ maVe?: string | null }>;
+  customer?: { phone?: string };
 };
 
 const PAYMENT_STATE_STORAGE_KEY = 'banvexe_payment_state';
@@ -52,15 +53,17 @@ const PaymentResultPage = () => {
             .split(',')
             .map((v) => v.trim())
             .filter((v) => v.length > 0);
+          let prefilledPhone = '';
           try {
-            if (highlightedTicketCodes.length === 0) {
-              const raw = sessionStorage.getItem(PAYMENT_STATE_STORAGE_KEY);
-              if (raw) {
-                const st = JSON.parse(raw) as PaymentState;
+            const raw = sessionStorage.getItem(PAYMENT_STATE_STORAGE_KEY);
+            if (raw) {
+              const st = JSON.parse(raw) as PaymentState;
+              if (highlightedTicketCodes.length === 0) {
                 highlightedTicketCodes = (st.createdTickets ?? [])
                   .map((t) => (t?.maVe ?? '').trim())
                   .filter((v) => v.length > 0);
               }
+              prefilledPhone = (st.customer?.phone ?? '').trim();
             }
           } catch {
             // ignore storage parse errors
@@ -76,7 +79,10 @@ const PaymentResultPage = () => {
           setTimeout(
             () =>
               navigate('/tra-cuu-ve', {
-                state: highlightedTicketCodes.length > 0 ? { highlightedTicketCodes } : undefined,
+                state:
+                  highlightedTicketCodes.length > 0 || prefilledPhone
+                    ? { highlightedTicketCodes, prefilledPhone }
+                    : undefined,
               }),
             1500
           );

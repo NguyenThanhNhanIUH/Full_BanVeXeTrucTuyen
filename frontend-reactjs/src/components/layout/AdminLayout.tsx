@@ -111,9 +111,11 @@ const AdminLayout: React.FC = () => {
           </div>
         </aside>
 
-        <main className='flex-1 overflow-y-auto p-6 md:p-8 relative'>
-          <div className="absolute top-[-10%] right-[-5%] w-[800px] h-[800px] rounded-full bg-gradient-to-br from-[#fff0eb] to-transparent opacity-60 z-0 pointer-events-none"></div>
-          
+        <main className='flex-1 overflow-y-auto p-6 md:p-8 relative isolate'>
+          <div
+            className="pointer-events-none absolute top-[-10%] right-[-5%] z-0 h-[800px] w-[800px] rounded-full bg-gradient-to-br from-[#fff0eb] to-transparent opacity-60"
+            aria-hidden
+          />
           <div className="relative z-10">
             <Outlet />
           </div>

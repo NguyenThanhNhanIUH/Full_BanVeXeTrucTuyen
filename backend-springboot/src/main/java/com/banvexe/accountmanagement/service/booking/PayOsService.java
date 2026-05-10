@@ -183,6 +183,13 @@ public class PayOsService {
         JsonNode data = node.path("data");
         String status = data.path("status").asText("");
         boolean paid = isPaidStatus(status);
+        if (!paid && !data.isMissingNode()) {
+            long amountRemaining = data.path("amountRemaining").asLong(-1);
+            long amountPaid = data.path("amountPaid").asLong(-1);
+            if (amountRemaining == 0 && amountPaid > 0) {
+                paid = true;
+            }
+        }
         finalizeOrder(orderCode, paid, status);
         return new PayOsConfirmResponse(orderCode, status, paid);
     }

@@ -26,6 +26,9 @@ const TripManagement: React.FC = () => {
   const [saving, setSaving] = useState(false);
   const [loadErr, setLoadErr] = useState<string | null>(null);
   const [tripSearch, setTripSearch] = useState('');
+  const [tripStatusFilter, setTripStatusFilter] = useState<
+    'ALL' | 'CHUA_KHOI_HANH' | 'DANG_CHAY' | 'HOAN_THANH' | 'HUY_CHUYEN'
+  >('ALL');
   const [tablePage, setTablePage] = useState(0);
   const isStaff = getStoredRole() === 'NHAN_VIEN';
   const [savingStatusId, setSavingStatusId] = useState<number | null>(null);
@@ -113,7 +116,11 @@ const TripManagement: React.FC = () => {
 
   const displayTrips = useMemo(() => {
     const q = tripSearch.trim().toLowerCase();
-    const sorted = [...trips].sort((a, b) => a.id - b.id);
+    let base = trips;
+    if (tripStatusFilter !== 'ALL') {
+      base = trips.filter((t) => t.trangThaiChuyen === tripStatusFilter);
+    }
+    const sorted = [...base].sort((a, b) => a.id - b.id);
     if (!q) return sorted;
     return sorted.filter((t) => {
       const hay = [
@@ -134,11 +141,11 @@ const TripManagement: React.FC = () => {
         .toLowerCase();
       return hay.includes(q);
     });
-  }, [trips, tripSearch]);
+  }, [trips, tripSearch, tripStatusFilter]);
 
   useEffect(() => {
     setTablePage(0);
-  }, [tripSearch]);
+  }, [tripSearch, tripStatusFilter]);
 
   const tripTotalPages = displayTrips.length === 0 ? 0 : Math.max(1, Math.ceil(displayTrips.length / ADMIN_PAGE_SIZE));
 
@@ -307,12 +314,18 @@ const TripManagement: React.FC = () => {
         title="Thống kê chuyến"
         loading={loading}
         gridClassName="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 mb-2"
+        activeActionKey={tripStatusFilter}
+        onItemClick={(key) => {
+          setTripStatusFilter(
+            key as 'ALL' | 'CHUA_KHOI_HANH' | 'DANG_CHAY' | 'HOAN_THANH' | 'HUY_CHUYEN',
+          );
+        }}
         items={[
-          { label: 'Tổng chuyến', value: tripStats.total, icon: <BusFront size={22} />, color: 'text-cyan-600', bg: 'bg-cyan-50', border: 'border-cyan-200' },
-          { label: 'Chưa khởi hành', value: tripStats.CHUA_KHOI_HANH, icon: <Timer size={22} />, color: 'text-amber-600', bg: 'bg-amber-50', border: 'border-amber-200' },
-          { label: 'Đang chạy', value: tripStats.DANG_CHAY, icon: <Play size={22} />, color: 'text-blue-600', bg: 'bg-blue-50', border: 'border-blue-200' },
-          { label: 'Hoàn thành', value: tripStats.HOAN_THANH, icon: <Flag size={22} />, color: 'text-emerald-600', bg: 'bg-emerald-50', border: 'border-emerald-200' },
-          { label: 'Hủy chuyến', value: tripStats.HUY_CHUYEN, icon: <OctagonX size={22} />, color: 'text-rose-600', bg: 'bg-rose-50', border: 'border-rose-200' },
+          { label: 'Tổng chuyến', value: tripStats.total, icon: <BusFront size={22} />, color: 'text-cyan-600', bg: 'bg-cyan-50', border: 'border-cyan-200', actionKey: 'ALL' },
+          { label: 'Chưa khởi hành', value: tripStats.CHUA_KHOI_HANH, icon: <Timer size={22} />, color: 'text-amber-600', bg: 'bg-amber-50', border: 'border-amber-200', actionKey: 'CHUA_KHOI_HANH' },
+          { label: 'Đang chạy', value: tripStats.DANG_CHAY, icon: <Play size={22} />, color: 'text-blue-600', bg: 'bg-blue-50', border: 'border-blue-200', actionKey: 'DANG_CHAY' },
+          { label: 'Hoàn thành', value: tripStats.HOAN_THANH, icon: <Flag size={22} />, color: 'text-emerald-600', bg: 'bg-emerald-50', border: 'border-emerald-200', actionKey: 'HOAN_THANH' },
+          { label: 'Hủy chuyến', value: tripStats.HUY_CHUYEN, icon: <OctagonX size={22} />, color: 'text-rose-600', bg: 'bg-rose-50', border: 'border-rose-200', actionKey: 'HUY_CHUYEN' },
         ]}
       />
 
@@ -332,7 +345,8 @@ const TripManagement: React.FC = () => {
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
         <div className="flex flex-col gap-2 border-b border-gray-100 bg-gray-50/60 px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-xs text-gray-600">
-            Khớp lọc: <span className="font-semibold text-gray-800">{displayTrips.length}</span> / {trips.length} chuyến (mỗi trang {ADMIN_PAGE_SIZE})
+            Khớp lọc: <span className="font-semibold text-gray-800">{displayTrips.length}</span> / {trips.length} chuyến
+            {tripStatusFilter !== 'ALL' ? ` (trạng thái: ${tripStatusFilter})` : ''} (mỗi trang {ADMIN_PAGE_SIZE})
           </p>
           <div className="relative w-full sm:max-w-sm">
             <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
@@ -375,7 +389,11 @@ const TripManagement: React.FC = () => {
               ) : displayTrips.length === 0 ? (
                 <tr>
                   <td colSpan={8} className="px-4 py-8 text-center text-gray-500">
-                    Không có chuyến khớp từ khóa &quot;{tripSearch}&quot;. Xóa ô tìm kiếm để xem lại toàn bộ.
+                    {tripSearch.trim()
+                      ? `Không có chuyến khớp từ khóa "${tripSearch}".`
+                      : tripStatusFilter !== 'ALL'
+                        ? `Không có chuyến trạng thái ${tripStatusFilter}. Bấm ô "Tổng chuyến" để xem tất cả.`
+                        : 'Không có chuyến khớp bộ lọc.'}
                   </td>
                 </tr>
               ) : (

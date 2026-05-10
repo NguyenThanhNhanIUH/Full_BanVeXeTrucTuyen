@@ -66,6 +66,8 @@ const AccountManagement: React.FC = () => {
   });
   const [tablePage, setTablePage] = useState(0);
   const [accountTab, setAccountTab] = useState<'STAFF' | 'CUSTOMER'>('STAFF');
+  /** Khách/NV bị khóa = INACTIVE trong bảng */
+  const [accountStatusFilter, setAccountStatusFilter] = useState<'ALL' | 'INACTIVE'>('ALL');
   const [listError, setListError] = useState('');
 
   const apiUrl = '/api';
@@ -146,6 +148,7 @@ const AccountManagement: React.FC = () => {
   const q = searchTerm.trim().toLowerCase();
   const filteredAccounts = useMemo(() => {
     return accounts.filter((acc) => {
+      if (accountStatusFilter === 'INACTIVE' && acc.status !== 'INACTIVE') return false;
       if (!q) return true;
       return (
         String(acc.id).includes(q) ||
@@ -154,7 +157,7 @@ const AccountManagement: React.FC = () => {
         (acc.phone?.toLowerCase().includes(q) ?? false)
       );
     });
-  }, [accounts, q]);
+  }, [accounts, q, accountStatusFilter]);
 
   useEffect(() => {
     setTablePage(0);
@@ -163,6 +166,10 @@ const AccountManagement: React.FC = () => {
   useEffect(() => {
     setTablePage(0);
   }, [accountTab]);
+
+  useEffect(() => {
+    setTablePage(0);
+  }, [accountStatusFilter]);
 
   const accountTotalPages =
     filteredAccounts.length === 0 ? 0 : Math.max(1, Math.ceil(filteredAccounts.length / ADMIN_PAGE_SIZE));
@@ -292,7 +299,10 @@ const AccountManagement: React.FC = () => {
       <div className="flex flex-wrap gap-2">
         <button
           type="button"
-          onClick={() => setAccountTab('STAFF')}
+          onClick={() => {
+            setAccountTab('STAFF');
+            setAccountStatusFilter('ALL');
+          }}
           className={`rounded-lg px-4 py-2 text-sm font-semibold transition ${
             accountTab === 'STAFF'
               ? 'bg-[#ef5222] text-white shadow'
@@ -303,7 +313,10 @@ const AccountManagement: React.FC = () => {
         </button>
         <button
           type="button"
-          onClick={() => setAccountTab('CUSTOMER')}
+          onClick={() => {
+            setAccountTab('CUSTOMER');
+            setAccountStatusFilter('ALL');
+          }}
           className={`rounded-lg px-4 py-2 text-sm font-semibold transition ${
             accountTab === 'CUSTOMER'
               ? 'bg-[#ef5222] text-white shadow'
@@ -319,12 +332,50 @@ const AccountManagement: React.FC = () => {
         loading={statsLoading}
         className="mb-2"
         gridClassName="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 mb-2"
+        isItemActive={(item) => {
+          const k = item.actionKey;
+          if (!k) return false;
+          if (k === 'customer-all') return accountTab === 'CUSTOMER' && accountStatusFilter === 'ALL';
+          if (k === 'staff-all') return accountTab === 'STAFF' && accountStatusFilter === 'ALL';
+          if (k === 'total-accounts') return accountTab === 'STAFF' && accountStatusFilter === 'ALL';
+          if (k === 'customer-locked') return accountTab === 'CUSTOMER' && accountStatusFilter === 'INACTIVE';
+          if (k === 'staff-locked') return accountTab === 'STAFF' && accountStatusFilter === 'INACTIVE';
+          return false;
+        }}
+        onItemClick={(key) => {
+          setTablePage(0);
+          setSearchTerm('');
+          if (key === 'customer-all') {
+            setAccountTab('CUSTOMER');
+            setAccountStatusFilter('ALL');
+            return;
+          }
+          if (key === 'staff-all') {
+            setAccountTab('STAFF');
+            setAccountStatusFilter('ALL');
+            return;
+          }
+          if (key === 'customer-locked') {
+            setAccountTab('CUSTOMER');
+            setAccountStatusFilter('INACTIVE');
+            return;
+          }
+          if (key === 'staff-locked') {
+            setAccountTab('STAFF');
+            setAccountStatusFilter('INACTIVE');
+            return;
+          }
+          if (key === 'total-accounts') {
+            setAccountTab('STAFF');
+            setAccountStatusFilter('ALL');
+          }
+        }}
         items={[
-          { label: 'Tài khoản khách', value: stats.customers, icon: <Activity size={22} />, color: 'text-blue-500', bg: 'bg-blue-50', border: 'border-blue-100' },
-          { label: 'Tổng nhân viên', value: stats.staff, icon: <Briefcase size={22} />, color: 'text-green-500', bg: 'bg-green-50', border: 'border-green-100' },
-          { label: 'Khách bị khóa', value: stats.lockedCustomers, icon: <AlertCircle size={22} />, color: 'text-rose-600', bg: 'bg-rose-50', border: 'border-rose-100' },
-          { label: 'Nhân viên bị khóa', value: stats.lockedStaff, icon: <AlertCircle size={22} />, color: 'text-orange-600', bg: 'bg-orange-50', border: 'border-orange-100' },
-          { label: 'Tổng tài khoản (KH + NV)', value: stats.total, icon: <Users size={22} />, color: 'text-gray-600', bg: 'bg-gray-50', border: 'border-gray-100' },
+          { label: 'Tài khoản khách', value: stats.customers, icon: <Activity size={22} />, color: 'text-blue-500', bg: 'bg-blue-50', border: 'border-blue-100', actionKey: 'customer-all' },
+          { label: 'Tổng nhân viên', value: stats.staff, icon: <Briefcase size={22} />, color: 'text-green-500', bg: 'bg-green-50', border: 'border-green-100', actionKey: 'staff-all' },
+          { label: 'Khách bị khóa', value: stats.lockedCustomers, icon: <AlertCircle size={22} />, color: 'text-rose-600', bg: 'bg-rose-50', border: 'border-rose-100', actionKey: 'customer-locked' },
+          { label: 'Nhân viên bị khóa', value: stats.lockedStaff, icon: <AlertCircle size={22} />, color: 'text-orange-600', bg: 'bg-orange-50', border: 'border-orange-100', actionKey: 'staff-locked' },
+          { label: 'Tổng tài khoản (KH + NV)', value: stats.total, icon: <Users size={22} />, color: 'text-gray-600', bg: 'bg-gray-50', border: 'border-gray-100', actionKey: 'total-accounts' },
         ]}
       />
 
@@ -338,6 +389,7 @@ const AccountManagement: React.FC = () => {
         <div className="flex flex-col gap-2 border-b border-gray-100 bg-gray-50/60 px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-xs text-gray-600">
             Khớp lọc: <span className="font-semibold text-gray-800">{filteredAccounts.length}</span> / {accounts.length} tài khoản (mỗi trang {ADMIN_PAGE_SIZE})
+            {accountStatusFilter === 'INACTIVE' ? ' — chỉ tài khoản bị khóa' : ''}
             {q ? ' (đã lọc)' : ''}
           </p>
           <div className="relative w-full sm:max-w-sm">

@@ -1,10 +1,11 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { FileText, Search, Ticket, User } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { api } from '../../api/client';
 
 type TicketSearchLocationState = {
   highlightedTicketCodes?: string[];
+  prefilledPhone?: string;
 };
 
 type TripSummary = {
@@ -75,9 +76,11 @@ const TicketSearchPage = () => {
     () => (state.highlightedTicketCodes ?? []).filter((c) => typeof c === 'string' && c.trim().length > 0),
     [state.highlightedTicketCodes],
   );
+  const prefilledPhoneFromNav = (state.prefilledPhone ?? '').trim();
 
-  const [phone, setPhone] = useState('');
+  const [phone, setPhone] = useState(prefilledPhoneFromNav);
   const [ticketCode, setTicketCode] = useState(highlightedCodes[0] ?? '');
+  const autoLookupAfterPaymentRef = useRef(false);
   const [dangTraCuu, setDangTraCuu] = useState(false);
   const [ticketResult, setTicketResult] = useState<TicketLookup | null>(null);
   const [traCuuError, setTraCuuError] = useState('');
@@ -90,11 +93,11 @@ const TicketSearchPage = () => {
     return ticketResult.chuyen?.tenTuyen || `${ticketResult.chuyen?.diemDi || ''} - ${ticketResult.chuyen?.diemDen || ''}`;
   }, [ticketResult]);
 
-  const onSearchTicket = () => {
+  const runTicketLookup = (soDienThoai: string, maVe: string) => {
     void (async () => {
-      const maVe = ticketCode.trim();
-      const soDienThoai = phone.trim();
-      if (!maVe || !soDienThoai) {
+      const p = soDienThoai.trim();
+      const m = maVe.trim();
+      if (!m || !p) {
         setTraCuuError('Vui lòng nhập đầy đủ số điện thoại và mã vé để tra cứu.');
         setTicketResult(null);
         return;
@@ -104,8 +107,8 @@ const TicketSearchPage = () => {
       try {
         const detailRes = await api.get<ApiResponse<TicketLookup>>('/api/public/booking/tickets/lookup', {
           params: {
-            phone: soDienThoai,
-            maVe,
+            phone: p,
+            maVe: m,
           },
         });
         const detail = detailRes.data?.data;
@@ -126,6 +129,19 @@ const TicketSearchPage = () => {
       }
     })();
   };
+
+  const onSearchTicket = () => runTicketLookup(phone, ticketCode);
+
+  useEffect(() => {
+    if (autoLookupAfterPaymentRef.current) return;
+    const p = prefilledPhoneFromNav;
+    const code = highlightedCodes[0]?.trim();
+    if (!p || !code) return;
+    autoLookupAfterPaymentRef.current = true;
+    setPhone(p);
+    setTicketCode(code);
+    runTicketLookup(p, code);
+  }, [highlightedCodes, prefilledPhoneFromNav]);
 
   const canRequestCancel = (ticket?: TicketLookup | null) => {
     if (!ticket) return false;
