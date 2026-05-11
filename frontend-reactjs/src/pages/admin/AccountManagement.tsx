@@ -578,13 +578,18 @@ const AccountManagement: React.FC = () => {
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1.5">Số điện thoại <span className="text-gray-400 font-normal">(Tùy chọn)</span></label>
                   <input 
-                    type="text" 
-                    inputMode="tel"
+                    type="tel"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
                     autoComplete="tel"
-                    title="Số VN: 10 số bắt đầu bằng 0, hoặc +84 / 84"
+                    maxLength={11}
+                    title="Chỉ nhập số, 10 số bắt đầu bằng 0 (ví dụ: 0912345678)"
                     className="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-[#ef5222]/20 focus:border-[#ef5222] transition-colors focus:outline-none"
                     value={currentAccount.phone || ''}
-                    onChange={e => setCurrentAccount({ ...currentAccount, phone: e.target.value })}
+                    onChange={(e) => {
+                      const phone = e.target.value.replace(/\D/g, '').slice(0, 11);
+                      setCurrentAccount({ ...currentAccount, phone });
+                    }}
                     placeholder="Ví dụ: 0912..."
                   />
                 </div>

@@ -202,6 +202,9 @@ public class AdminAccountService {
         if (phone != null && khachHangRepository.existsByPhone(phone)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Số điện thoại đã được sử dụng");
         }
+        if (phone != null && userAccountRepository.existsByPhone(phone)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Số điện thoại đã được sử dụng");
+        }
 
         KhachHang k = new KhachHang();
         k.setEmail(email);
@@ -213,6 +216,7 @@ public class AdminAccountService {
         UserAccount customer = new UserAccount();
         customer.setKhachHang(k);
         customer.setEmail(email);
+        customer.setPhone(phone);
         customer.setPasswordHash(passwordService.encode(request.password()));
         customer.setRole(UserRole.KHACH_HANG);
         customer.setStatus(AccountStatus.ACTIVE);
@@ -232,6 +236,13 @@ public class AdminAccountService {
         }
         k.setPhone(phone);
         khachHangRepository.save(k);
+        userAccountRepository.findByKhachHang_Id(k.getId()).ifPresent(u -> {
+            if (phone != null && userAccountRepository.existsByPhoneAndIdNot(phone, u.getId())) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Số điện thoại đã được sử dụng");
+            }
+            u.setPhone(phone);
+            userAccountRepository.save(u);
+        });
         return toCustomerSummary(k, userAccountRepository.findByKhachHang_Id(k.getId()));
     }
 

@@ -35,6 +35,10 @@ public final class PhoneNumberUtil {
         }
         t = t.replaceAll("\\D", "");
         if (t.isEmpty()) {
+            if (!input.trim().isEmpty()) {
+                throw new IllegalArgumentException(
+                    "Số điện thoại không hợp lệ. Nhập chữ số (10 số bắt đầu bằng 0) hoặc dạng +84.");
+            }
             return null;
         }
         if (t.charAt(0) != '0' && t.length() >= 9 && t.length() <= 10) {
