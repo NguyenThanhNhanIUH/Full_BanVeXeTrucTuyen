@@ -3,10 +3,13 @@
 
 FROM maven:3.9.8-eclipse-temurin-17 AS build
 WORKDIR /build
+# Railway build container RAM hạn chế — tránh Maven bị Killed khi compile.
+ENV MAVEN_OPTS="-Xmx384m -XX:+TieredCompilation -XX:TieredStopAtLevel=1"
 
 COPY backend-springboot/pom.xml backend-springboot/
+RUN cd backend-springboot && mvn -B -q dependency:go-offline -DskipTests || true
 COPY backend-springboot/src backend-springboot/src
-RUN cd backend-springboot && mvn -DskipTests clean package
+RUN cd backend-springboot && mvn -B -q -DskipTests clean package
 
 FROM eclipse-temurin:17-jre
 WORKDIR /app
