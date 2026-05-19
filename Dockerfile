@@ -15,6 +15,8 @@ COPY --from=build /build/backend-springboot/target/account-management-0.0.1-SNAP
 COPY database /database
 
 ENV APP_DB_SEED_SCRIPT=/database/data.sql
+# Railway hobby RAM ~512MB — default JVM heap can OOM ("Killed" in deploy logs).
+ENV JAVA_TOOL_OPTIONS=-Xms128m -Xmx384m -XX:+UseSerialGC
 EXPOSE 8080
 
-ENTRYPOINT ["sh", "-c", "java ${JAVA_TOOL_OPTIONS} -jar app.jar --server.port=${PORT:-8080}"]
+ENTRYPOINT ["sh", "-c", "exec java -jar app.jar --server.port=${PORT:-8080}"]

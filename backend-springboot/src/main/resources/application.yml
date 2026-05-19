@@ -12,6 +12,10 @@ spring:
     driver-class-name: org.mariadb.jdbc.Driver
     username: ${SPRING_DATASOURCE_USERNAME}
     password: ${SPRING_DATASOURCE_PASSWORD}
+    hikari:
+      connection-timeout: 30000
+      maximum-pool-size: 5
+      minimum-idle: 1
   jpa:
     hibernate:
       ddl-auto: ${SPRING_JPA_HIBERNATE_DDL_AUTO:validate}
@@ -48,7 +52,8 @@ spring:
       continue-on-error: true
 
 server:
-  port: ${SERVER_PORT:8080}
+  # Railway injects PORT; SERVER_PORT is fallback for local .env only.
+  port: ${PORT:${SERVER_PORT:8080}}
 
 cloudinary:
   cloud-name: ${CLOUDINARY_CLOUD_NAME:}
@@ -56,6 +61,12 @@ cloudinary:
   api-secret: ${CLOUDINARY_API_SECRET:}
 
 app:
+  db:
+    charset:
+      auto-fix: ${APP_DB_CHARSET_AUTO_FIX:false}
+    seed:
+      enabled: ${APP_DB_SEED_ENABLED:true}
+      reseed-if-garbled: ${APP_DB_SEED_RESEED_IF_GARBLED:false}
   mail:
     from: ${APP_MAIL_FROM:${SPRING_MAIL_USERNAME:no-reply@banvexe.local}}
     from-name: ${APP_MAIL_FROM_NAME:BanVeXe}

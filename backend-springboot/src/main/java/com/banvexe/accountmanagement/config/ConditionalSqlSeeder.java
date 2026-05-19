@@ -98,8 +98,8 @@ public class ConditionalSqlSeeder implements ApplicationRunner, Ordered {
 
     @Override
     public int getOrder() {
-        // Run seeding as early as possible during startup.
-        return Ordered.HIGHEST_PRECEDENCE;
+        // After web server is up so Railway/Render healthchecks can pass while seed runs.
+        return Ordered.LOWEST_PRECEDENCE;
     }
 
     private List<String> parseTables(String csv) {
