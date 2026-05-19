@@ -4,7 +4,7 @@
 FROM maven:3.9.8-eclipse-temurin-17 AS build
 WORKDIR /build
 # Railway build container RAM hạn chế — tránh Maven bị Killed khi compile.
-ENV MAVEN_OPTS="-Xmx384m -XX:+TieredCompilation -XX:TieredStopAtLevel=1"
+ENV MAVEN_OPTS="-Xmx384m"
 
 COPY backend-springboot/pom.xml backend-springboot/
 RUN cd backend-springboot && mvn -B -q dependency:go-offline -DskipTests || true
@@ -19,7 +19,7 @@ COPY database /database
 
 ENV APP_DB_SEED_SCRIPT=/database/data.sql
 # Railway hobby RAM ~512MB — default JVM heap can OOM ("Killed" in deploy logs).
-ENV JAVA_TOOL_OPTIONS=-Xms128m -Xmx384m -XX:+UseSerialGC
+ENV JAVA_TOOL_OPTIONS="-Xms128m -Xmx384m -XX:+UseSerialGC"
 EXPOSE 8080
 
 ENTRYPOINT ["sh", "-c", "exec java -jar app.jar --server.port=${PORT:-8080}"]
