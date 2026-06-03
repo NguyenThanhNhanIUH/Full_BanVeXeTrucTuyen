@@ -6,8 +6,10 @@
 
 export type SeatStatus = { maGhe: string; daBan: boolean; dangGiuCho?: boolean };
 
-export function isSeatUnavailable(seat: SeatStatus): boolean {
-  return seat.daBan || Boolean(seat.dangGiuCho);
+export function isSeatUnavailable(seat: SeatStatus, mySelectedSeats?: string[]): boolean {
+  if (seat.daBan) return true;
+  if (!seat.dangGiuCho) return false;
+  return !mySelectedSeats?.includes(seat.maGhe);
 }
 
 /** API GET /api/catalog/trips/{id}/seats */
@@ -274,7 +276,7 @@ export function tripHasAvailableSeatMatchingFilters(
   if (!hasRow && !hasDeck) return true;
   if (!soDo?.ghe?.length) return true;
   for (const g of soDo.ghe) {
-    if (isSeatUnavailable(g)) continue;
+    if (isSeatUnavailable(g, [])) continue;
     if (isSeatVisibleByFilters(g.maGhe, loaiXe, soDo.ghe, row, deck)) return true;
   }
   return false;

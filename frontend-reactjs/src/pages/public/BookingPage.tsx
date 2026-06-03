@@ -4,6 +4,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { api } from '../../api/client';
 import { getStoredEmail, getStoredName, getStoredPhone, getStoredRole, getToken } from '../../auth/storage';
 import { collectHienThiByMaGhe, displaySeatCodes, getSeatLayoutByVehicleType, isSeatUnavailable, type SeatMapResponse, type SeatStatus } from '../../utils/seatMapLayout';
+import { useRealtimeSeatMap } from '../../hooks/useRealtimeSeatMap';
 
 type TripPayload = {
   id: number;
@@ -79,10 +80,8 @@ const BookingPage = () => {
   const outboundTrip = (isRoundTrip ? state.outboundTrip : state.trip) as TripPayload | undefined;
   const returnTrip = (isRoundTrip ? state.returnTrip : undefined) as TripPayload | undefined;
 
-  const [outboundMap, setOutboundMap] = useState<SeatMapResponse | null>(null);
-  const [returnMap, setReturnMap] = useState<SeatMapResponse | null>(null);
-  const [loadingOut, setLoadingOut] = useState(false);
-  const [loadingRet, setLoadingRet] = useState(false);
+  const outboundSeatMap = useRealtimeSeatMap(outboundTrip?.id);
+  const returnSeatMap = useRealtimeSeatMap(returnTrip?.id);
   const [selectedOutboundSeats, setSelectedOutboundSeats] = useState<string[]>(state.selectedSeatsOutbound ?? state.selectedSeats ?? []);
   const [selectedReturnSeats, setSelectedReturnSeats] = useState<string[]>(state.selectedSeatsReturn ?? []);
   const [fullName, setFullName] = useState('');
@@ -154,50 +153,6 @@ const BookingPage = () => {
     localStorage.setItem(BOOKING_PHONE_KEY, phone.trim());
   }, [phone]);
 
-  useEffect(() => {
-    if (!outboundTrip?.id) return;
-    let active = true;
-    const loadSeats = (showLoading: boolean) => {
-      if (showLoading) setLoadingOut(true);
-      api
-        .get<{ data?: SeatMapResponse }>(`/api/catalog/trips/${outboundTrip.id}/seats`)
-        .then((res) => {
-          if (active) setOutboundMap(res.data?.data ?? null);
-        })
-        .finally(() => {
-          if (active && showLoading) setLoadingOut(false);
-        });
-    };
-    loadSeats(true);
-    const timer = window.setInterval(() => loadSeats(false), 10000);
-    return () => {
-      active = false;
-      window.clearInterval(timer);
-    };
-  }, [outboundTrip?.id]);
-
-  useEffect(() => {
-    if (!returnTrip?.id) return;
-    let active = true;
-    const loadSeats = (showLoading: boolean) => {
-      if (showLoading) setLoadingRet(true);
-      api
-        .get<{ data?: SeatMapResponse }>(`/api/catalog/trips/${returnTrip.id}/seats`)
-        .then((res) => {
-          if (active) setReturnMap(res.data?.data ?? null);
-        })
-        .finally(() => {
-          if (active && showLoading) setLoadingRet(false);
-        });
-    };
-    loadSeats(true);
-    const timer = window.setInterval(() => loadSeats(false), 10000);
-    return () => {
-      active = false;
-      window.clearInterval(timer);
-    };
-  }, [returnTrip?.id]);
-
   const totalOutbound = (selectedOutboundSeats.length || 0) * Number(outboundTrip?.giaVe || 0);
   const totalReturn = (selectedReturnSeats.length || 0) * Number(returnTrip?.giaVe || 0);
   const totalAmount = totalOutbound + totalReturn;
@@ -213,14 +168,14 @@ const BookingPage = () => {
   }, [outboundTrip]);
 
   const hienThiTheoMaGheDi = useMemo(() => {
-    if (!outboundMap?.ghe || !outboundTrip) return new Map<string, string>();
-    return collectHienThiByMaGhe(getSeatLayoutByVehicleType(outboundTrip.loaiXe || '', outboundMap.ghe));
-  }, [outboundMap, outboundTrip]);
+    if (!outboundSeatMap.map?.ghe || !outboundTrip) return new Map<string, string>();
+    return collectHienThiByMaGhe(getSeatLayoutByVehicleType(outboundTrip.loaiXe || '', outboundSeatMap.map.ghe));
+  }, [outboundSeatMap.map, outboundTrip]);
 
   const hienThiTheoMaGheVe = useMemo(() => {
-    if (!returnMap?.ghe || !returnTrip) return new Map<string, string>();
-    return collectHienThiByMaGhe(getSeatLayoutByVehicleType(returnTrip.loaiXe || '', returnMap.ghe));
-  }, [returnMap, returnTrip]);
+    if (!returnSeatMap.map?.ghe || !returnTrip) return new Map<string, string>();
+    return collectHienThiByMaGhe(getSeatLayoutByVehicleType(returnTrip.loaiXe || '', returnSeatMap.map.ghe));
+  }, [returnSeatMap.map, returnTrip]);
 
   const onSubmitPayment = () => {
     void (async () => {
@@ -264,6 +219,7 @@ const BookingPage = () => {
           chuyenXeId: outboundTrip.id,
           maGhe: selectedOutboundSeats,
           ghiChu: noteBase,
+          holdToken: outboundSeatMap.holdToken,
           ...(useAuthenticatedBooking
             ? {}
             : {
@@ -279,6 +235,7 @@ const BookingPage = () => {
             chuyenXeId: returnTrip.id,
             maGhe: selectedReturnSeats,
             ghiChu: `${noteBase} | Khứ hồi - chiều về`,
+            holdToken: returnSeatMap.holdToken,
             ...(useAuthenticatedBooking
               ? {}
               : {
@@ -326,18 +283,31 @@ const BookingPage = () => {
     selectedSeats: string[],
     setSelectedSeats: Dispatch<SetStateAction<string[]>>,
     title: string,
+    holdSeat: (maGhe: string) => Promise<void>,
+    releaseSeat: (maGhe: string) => Promise<void>,
   ) => {
     if (!trip) return null;
     const onToggleSeat = (seat: SeatStatus) => {
-      if (isSeatUnavailable(seat)) return;
-      setSelectedSeats((prev) => {
-        if (prev.includes(seat.maGhe)) return prev.filter((s) => s !== seat.maGhe);
-        if (prev.length >= 5) {
-          window.alert('Bạn chỉ có thể chọn tối đa 5 ghế cho mỗi chiều.');
-          return prev;
+      void (async () => {
+        if (isSeatUnavailable(seat, selectedSeats) && !selectedSeats.includes(seat.maGhe)) return;
+        try {
+          if (selectedSeats.includes(seat.maGhe)) {
+            await releaseSeat(seat.maGhe);
+            setSelectedSeats((prev) => prev.filter((s) => s !== seat.maGhe));
+            return;
+          }
+          if (selectedSeats.length >= 5) {
+            window.alert('Bạn chỉ có thể chọn tối đa 5 ghế cho mỗi chiều.');
+            return;
+          }
+          await holdSeat(seat.maGhe);
+          setSelectedSeats((prev) => [...prev, seat.maGhe]);
+        } catch (error) {
+          const axiosErr = error as { response?: { data?: { message?: string } } };
+          const msg = axiosErr.response?.data?.message || 'Ghế vừa được người khác chọn. Vui lòng chọn ghế khác.';
+          window.alert(msg);
         }
-        return [...prev, seat.maGhe];
-      });
+      })();
     };
 
     return (
@@ -353,7 +323,7 @@ const BookingPage = () => {
               const renderSeatButton = (seat: SeatStatus & { hienThiGhe?: string }, sizeClass = 'h-9 w-9 md:h-10 md:w-10') => {
                 if (!seat.maGhe) return null;
                 const isSelected = selectedSeats.includes(seat.maGhe);
-                const unavailable = isSeatUnavailable(seat);
+                const unavailable = isSeatUnavailable(seat, selectedSeats);
                 const cls = seat.daBan
                   ? 'cursor-not-allowed border-gray-300 bg-gray-200 text-gray-400'
                   : seat.dangGiuCho
@@ -541,20 +511,24 @@ const BookingPage = () => {
               <div className={`grid gap-4 ${isRoundTrip ? 'grid-cols-1 xl:grid-cols-2' : 'grid-cols-1'}`}>
                 {renderSeatSection(
                   outboundTrip,
-                  outboundMap,
-                  loadingOut,
+                  outboundSeatMap.map,
+                  outboundSeatMap.loading,
                   selectedOutboundSeats,
                   setSelectedOutboundSeats,
                   isRoundTrip ? 'Chọn ghế - Chuyến đi' : 'Chọn ghế',
+                  outboundSeatMap.holdSeat,
+                  outboundSeatMap.releaseSeat,
                 )}
                 {isRoundTrip &&
                   renderSeatSection(
                   returnTrip,
-                  returnMap,
-                  loadingRet,
+                  returnSeatMap.map,
+                  returnSeatMap.loading,
                   selectedReturnSeats,
                   setSelectedReturnSeats,
                   'Chọn ghế - Chuyến về',
+                  returnSeatMap.holdSeat,
+                  returnSeatMap.releaseSeat,
                 )}
               </div>
               <div className="rounded-lg border border-gray-200 bg-[#fafafa] p-3 text-sm">
@@ -562,6 +536,7 @@ const BookingPage = () => {
                 <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2">
                   <span className="flex items-center gap-2"><span className="h-4 w-4 rounded bg-gray-300" />Đã bán</span>
                   <span className="flex items-center gap-2"><span className="h-4 w-4 rounded border border-blue-300 bg-blue-50" />Còn trống</span>
+                  <span className="flex items-center gap-2"><span className="h-4 w-4 rounded border border-amber-300 bg-amber-100" />Đang giữ chỗ</span>
                   <span className="flex items-center gap-2"><span className="h-4 w-4 rounded border border-[#ef5222] bg-[#fff2ed]" />Đang chọn</span>
                 </div>
               </div>

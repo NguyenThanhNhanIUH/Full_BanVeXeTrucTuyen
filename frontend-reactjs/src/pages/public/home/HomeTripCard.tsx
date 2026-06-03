@@ -179,7 +179,7 @@ const HomeTripCard = ({
                     const renderSeatButton = (seat: SeatStatus & { hienThiGhe?: string }, sizeClass = 'w-11 h-11 md:w-12 md:h-12') => {
                       if (!seat.maGhe) return null;
                       const selected = (gheDangChonTheoChuyen[trip.id] ?? []).includes(seat.maGhe);
-                      const unavailable = isSeatUnavailable(seat);
+                      const unavailable = isSeatUnavailable(seat, gheDangChonTheoChuyen[trip.id] ?? []);
                       const seatClass = seat.daBan
                         ? 'bg-gray-200 text-gray-400 border-gray-300 cursor-not-allowed'
                         : seat.dangGiuCho

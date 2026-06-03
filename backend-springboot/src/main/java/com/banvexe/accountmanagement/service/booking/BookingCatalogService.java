@@ -13,8 +13,10 @@ import com.banvexe.accountmanagement.entity.TuyenXe;
 import com.banvexe.accountmanagement.entity.Xe;
 import com.banvexe.accountmanagement.repository.ChiTietVeRepository;
 import com.banvexe.accountmanagement.repository.ChuyenXeRepository;
+import com.banvexe.accountmanagement.repository.GiuGheTamRepository;
 import com.banvexe.accountmanagement.repository.TuyenXeRepository;
 import java.text.Normalizer;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
@@ -41,15 +43,18 @@ public class BookingCatalogService {
     private final TuyenXeRepository tuyenXeRepository;
     private final ChuyenXeRepository chuyenXeRepository;
     private final ChiTietVeRepository chiTietVeRepository;
+    private final GiuGheTamRepository giuGheTamRepository;
 
     public BookingCatalogService(
         TuyenXeRepository tuyenXeRepository,
         ChuyenXeRepository chuyenXeRepository,
-        ChiTietVeRepository chiTietVeRepository
+        ChiTietVeRepository chiTietVeRepository,
+        GiuGheTamRepository giuGheTamRepository
     ) {
         this.tuyenXeRepository = tuyenXeRepository;
         this.chuyenXeRepository = chuyenXeRepository;
         this.chiTietVeRepository = chiTietVeRepository;
+        this.giuGheTamRepository = giuGheTamRepository;
     }
 
     public List<RouteSummaryDto> searchRoutes(String diemDi, String diemDen) {
@@ -120,6 +125,8 @@ public class BookingCatalogService {
         Set<String> held = new HashSet<>(
             chiTietVeRepository.findOccupiedSeatCodes(c.getId(), List.of(TicketStatus.CHO_THANH_TOAN))
         );
+        giuGheTamRepository.findByChuyenXeIdAndExpiresAtAfter(c.getId(), Instant.now())
+            .forEach(h -> held.add(h.getSoGhe()));
         Set<String> sold = new HashSet<>(
             chiTietVeRepository.findOccupiedSeatCodes(
                 c.getId(),

@@ -8,6 +8,7 @@ import java.util.List;
 public record BookTicketRequest(
     @NotNull Integer chuyenXeId,
     @NotEmpty @Size(max = 20) List<@Size(min = 1, max = 10) String> maGhe,
-    @Size(max = 500) String ghiChu
+    @Size(max = 500) String ghiChu,
+    @Size(max = 64) String holdToken
 ) {
 }

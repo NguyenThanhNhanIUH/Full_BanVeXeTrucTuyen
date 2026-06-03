@@ -47,6 +47,7 @@ public class SecurityConfig {
                 .requestMatchers("/api/auth/forgot-password/**").permitAll()
                 .requestMatchers("/api/accounts/health").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/catalog/**").permitAll()
+                .requestMatchers(HttpMethod.POST, "/api/catalog/trips/*/seats/hold", "/api/catalog/trips/*/seats/release").permitAll()
                 .requestMatchers("/api/public/booking/**").permitAll()
                 .requestMatchers("/api/public/assistant/**").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/public/branding").permitAll()

@@ -50,6 +50,7 @@ public class CustomerTicketService {
     private final BookingCatalogService bookingCatalogService;
     private final BookingNotificationService bookingNotificationService;
     private final BookingHoldPolicy bookingHoldPolicy;
+    private final SeatSelectionHoldService seatSelectionHoldService;
 
     public CustomerTicketService(
         VeXeRepository veXeRepository,
@@ -60,7 +61,8 @@ public class CustomerTicketService {
         KhachHangRepository khachHangRepository,
         BookingCatalogService bookingCatalogService,
         BookingNotificationService bookingNotificationService,
-        BookingHoldPolicy bookingHoldPolicy
+        BookingHoldPolicy bookingHoldPolicy,
+        SeatSelectionHoldService seatSelectionHoldService
     ) {
         this.veXeRepository = veXeRepository;
         this.chuyenXeRepository = chuyenXeRepository;
@@ -71,6 +73,7 @@ public class CustomerTicketService {
         this.bookingCatalogService = bookingCatalogService;
         this.bookingNotificationService = bookingNotificationService;
         this.bookingHoldPolicy = bookingHoldPolicy;
+        this.seatSelectionHoldService = seatSelectionHoldService;
     }
 
     @Transactional
@@ -78,13 +81,13 @@ public class CustomerTicketService {
         var user = userAccountRepository.findByEmail(normalizeEmail(email))
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Không tìm thấy tài khoản"));
         KhachHang kh = requireKhachForLoggedIn(user);
-        return bookForKhach(kh, req.chuyenXeId(), req.maGhe(), req.ghiChu());
+        return bookForKhach(kh, req.chuyenXeId(), req.maGhe(), req.ghiChu(), req.holdToken());
     }
 
     @Transactional
     public CustomerTicketDto bookGuest(GuestBookTicketRequest req) {
         KhachHang kh = resolveOrCreateGuestProfile(req.email(), req.soDienThoai(), req.hoTen());
-        return bookForKhach(kh, req.chuyenXeId(), req.maGhe(), req.ghiChu());
+        return bookForKhach(kh, req.chuyenXeId(), req.maGhe(), req.ghiChu(), req.holdToken());
     }
 
     private KhachHang requireKhachForLoggedIn(UserAccount user) {
@@ -104,7 +107,7 @@ public class CustomerTicketService {
     }
 
     private CustomerTicketDto bookForKhach(
-        KhachHang kh, Integer chuyenXeId, List<String> rawSeats, String ghiChu) {
+        KhachHang kh, Integer chuyenXeId, List<String> rawSeats, String ghiChu, String holdToken) {
         ChuyenXe chuyen = chuyenXeRepository.findByIdWithDetailsForUpdate(chuyenXeId)
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Không tìm thấy chuyến xe"));
 
@@ -145,6 +148,7 @@ public class CustomerTicketService {
                 throw new ResponseStatusException(HttpStatus.CONFLICT, "Ghế đã được đặt: " + s);
             }
         }
+        seatSelectionHoldService.assertSeatsNotHeldByOthers(chuyen.getId(), holdToken, seats);
 
         BigDecimal tong = chuyen.getGiaVe().multiply(BigDecimal.valueOf(seats.size()));
         VeXe ve = new VeXe();
@@ -164,6 +168,7 @@ public class CustomerTicketService {
             ct.setSoGhe(seat);
             chiTietVeRepository.save(ct);
         }
+        seatSelectionHoldService.releaseSeats(chuyen.getId(), seats);
 
         return toCustomerDto(veXeRepository.findByIdWithDetails(ve.getId()).orElse(ve));
     }

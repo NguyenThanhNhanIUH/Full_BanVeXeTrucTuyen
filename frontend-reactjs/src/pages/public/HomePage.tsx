@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useLocation, useNavigate, useOutletContext } from 'react-router-dom';
 import { api } from '../../api/client';
 import type { PublicBranding } from '../../types/publicBranding';
+import { getApiBaseUrl, getSeatHoldToken } from '../../utils/seatHold';
 import {
   getVehicleKind,
   gheHienThiTrenBang,
@@ -279,31 +280,75 @@ const HomePage = () => {
   };
 
   const onSelectSeat = (tripId: number, seat: SeatStatus) => {
-    if (isSeatUnavailable(seat)) return;
-    setTripDangNoiBatId(tripId);
-    setTripIdsDaMoChonGhe((prev) => (prev.includes(tripId) ? prev : [...prev, tripId]));
-    const trip = [...danhSachChuyen, ...danhSachChuyenVe].find((t) => t.id === tripId);
-    if (trip) {
-      if (activeResultTab === 'outbound') setChuyenDiDaChon(trip);
-      if (activeResultTab === 'return') setChuyenVeDaChon(trip);
-      if (tripType === 'one-way') {
-        setChuyenChonDauTien(trip);
-      } else if (!chuyenChonDauTien) {
-        setChuyenChonDauTien(trip);
+    void (async () => {
+      const current = gheDangChonTheoChuyen[tripId] ?? [];
+      if (isSeatUnavailable(seat, current) && !current.includes(seat.maGhe)) return;
+
+      setTripDangNoiBatId(tripId);
+      setTripIdsDaMoChonGhe((prev) => (prev.includes(tripId) ? prev : [...prev, tripId]));
+      const trip = [...danhSachChuyen, ...danhSachChuyenVe].find((t) => t.id === tripId);
+      if (trip) {
+        if (activeResultTab === 'outbound') setChuyenDiDaChon(trip);
+        if (activeResultTab === 'return') setChuyenVeDaChon(trip);
+        if (tripType === 'one-way') {
+          setChuyenChonDauTien(trip);
+        } else if (!chuyenChonDauTien) {
+          setChuyenChonDauTien(trip);
+        }
       }
-    }
-    setGheDangChonTheoChuyen((prev) => {
-      const current = prev[tripId] ?? [];
-      if (current.includes(seat.maGhe)) {
-        return { ...prev, [tripId]: current.filter((s) => s !== seat.maGhe) };
+
+      const holdToken = getSeatHoldToken(tripId);
+      try {
+        if (current.includes(seat.maGhe)) {
+          await api.post('/api/catalog/trips/' + tripId + '/seats/release', { holdToken, maGhe: seat.maGhe });
+          setGheDangChonTheoChuyen((prev) => ({
+            ...prev,
+            [tripId]: (prev[tripId] ?? []).filter((s) => s !== seat.maGhe),
+          }));
+          return;
+        }
+        if (current.length >= 5) {
+          window.alert('Bạn chỉ có thể chọn tối đa 5 ghế.');
+          return;
+        }
+        await api.post('/api/catalog/trips/' + tripId + '/seats/hold', { holdToken, maGhe: seat.maGhe });
+        setGheDangChonTheoChuyen((prev) => ({
+          ...prev,
+          [tripId]: [...(prev[tripId] ?? []), seat.maGhe],
+        }));
+      } catch (error) {
+        const axiosErr = error as { response?: { data?: { message?: string } } };
+        window.alert(axiosErr.response?.data?.message || 'Ghế vừa được người khác chọn. Vui lòng chọn ghế khác.');
       }
-      if (current.length >= 5) {
-        window.alert('Bạn chỉ có thể chọn tối đa 5 ghế.');
-        return prev;
-      }
-      return { ...prev, [tripId]: [...current, seat.maGhe] };
-    });
+    })();
   };
+
+  useEffect(() => {
+    const base = getApiBaseUrl();
+    if (!base) return;
+    const tripIds = Array.from(new Set([...tripIdsDaMoChonGhe, ...(tripDangChonGhe ? [tripDangChonGhe] : [])]));
+    if (!tripIds.length) return;
+
+    const sources = tripIds.map((tripId) => {
+      const es = new EventSource(`${base}/api/catalog/trips/${tripId}/seats/stream`);
+      es.addEventListener('seats', (event) => {
+        try {
+          const parsed = JSON.parse(String(event.data)) as SeatMapResponse;
+          setSoDoGheTheoChuyen((prev) => ({ ...prev, [tripId]: parsed }));
+        } catch {
+          // ignore malformed SSE payload
+        }
+      });
+      es.onerror = () => {
+        es.close();
+      };
+      return es;
+    });
+
+    return () => {
+      sources.forEach((es) => es.close());
+    };
+  }, [tripIdsDaMoChonGhe, tripDangChonGhe]);
 
   useEffect(() => {
     const state = location.state as
