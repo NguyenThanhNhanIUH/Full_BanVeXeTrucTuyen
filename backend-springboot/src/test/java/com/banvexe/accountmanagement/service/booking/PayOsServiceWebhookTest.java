@@ -51,6 +51,7 @@ class PayOsServiceWebhookTest {
             thanhToanRepository,
             khachHangRepository,
             bookingNotificationService,
+            new BookingHoldPolicy(5),
             new ObjectMapper()
         );
         ReflectionTestUtils.setField(service, "checksumKey", "test-secret");
@@ -75,6 +76,7 @@ class PayOsServiceWebhookTest {
             thanhToanRepository,
             khachHangRepository,
             bookingNotificationService,
+            new BookingHoldPolicy(5),
             new ObjectMapper()
         );
         ReflectionTestUtils.setField(service, "checksumKey", "test-secret");
@@ -109,6 +111,7 @@ class PayOsServiceWebhookTest {
             thanhToanRepository,
             khachHangRepository,
             bookingNotificationService,
+            new BookingHoldPolicy(5),
             new ObjectMapper()
         );
         ReflectionTestUtils.setField(service, "checksumKey", "test-secret");
@@ -135,6 +138,7 @@ class PayOsServiceWebhookTest {
             thanhToanRepository,
             khachHangRepository,
             bookingNotificationService,
+            new BookingHoldPolicy(5),
             new ObjectMapper()
         );
         ReflectionTestUtils.setField(service, "checksumKey", "test-secret");

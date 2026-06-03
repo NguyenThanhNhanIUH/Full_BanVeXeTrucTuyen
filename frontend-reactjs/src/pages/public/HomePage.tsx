@@ -6,6 +6,7 @@ import {
   getVehicleKind,
   gheHienThiTrenBang,
   tripHasAvailableSeatMatchingFilters,
+  isSeatUnavailable,
   type SeatMapResponse,
   type SeatStatus,
 } from '../../utils/seatMapLayout';
@@ -278,7 +279,7 @@ const HomePage = () => {
   };
 
   const onSelectSeat = (tripId: number, seat: SeatStatus) => {
-    if (seat.daBan) return;
+    if (isSeatUnavailable(seat)) return;
     setTripDangNoiBatId(tripId);
     setTripIdsDaMoChonGhe((prev) => (prev.includes(tripId) ? prev : [...prev, tripId]));
     const trip = [...danhSachChuyen, ...danhSachChuyenVe].find((t) => t.id === tripId);

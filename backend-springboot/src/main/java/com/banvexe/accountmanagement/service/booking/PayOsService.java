@@ -47,6 +47,7 @@ public class PayOsService {
     private final ThanhToanRepository thanhToanRepository;
     private final KhachHangRepository khachHangRepository;
     private final BookingNotificationService bookingNotificationService;
+    private final BookingHoldPolicy bookingHoldPolicy;
     private final ObjectMapper objectMapper;
     private final HttpClient httpClient = HttpClient.newHttpClient();
 
@@ -76,12 +77,14 @@ public class PayOsService {
         ThanhToanRepository thanhToanRepository,
         KhachHangRepository khachHangRepository,
         BookingNotificationService bookingNotificationService,
+        BookingHoldPolicy bookingHoldPolicy,
         ObjectMapper objectMapper
     ) {
         this.veXeRepository = veXeRepository;
         this.thanhToanRepository = thanhToanRepository;
         this.khachHangRepository = khachHangRepository;
         this.bookingNotificationService = bookingNotificationService;
+        this.bookingHoldPolicy = bookingHoldPolicy;
         this.objectMapper = objectMapper;
     }
 
@@ -105,6 +108,7 @@ public class PayOsService {
             if (ve.getTrangThai() != TicketStatus.CHO_THANH_TOAN) {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Chỉ hỗ trợ thanh toán vé chờ thanh toán");
             }
+            bookingHoldPolicy.assertHoldActive(ve);
         }
 
         long orderCode = Instant.now().toEpochMilli();
@@ -244,22 +248,30 @@ public class PayOsService {
 
         boolean hasTransitionToPaid = false;
         for (ThanhToan tt : txns) {
-            PaymentTxnStatus nextStatus = paid ? PaymentTxnStatus.THANH_CONG : PaymentTxnStatus.THAT_BAI;
+            VeXe ve = tt.getVeXe();
+            boolean holdExpired = paid && ve != null && bookingHoldPolicy.isHoldExpired(ve);
+            PaymentTxnStatus nextStatus = !paid || holdExpired
+                ? PaymentTxnStatus.THAT_BAI
+                : PaymentTxnStatus.THANH_CONG;
             if (tt.getTrangThai() != nextStatus) {
                 if (nextStatus == PaymentTxnStatus.THANH_CONG) {
                     hasTransitionToPaid = true;
                 }
                 tt.setTrangThai(nextStatus);
                 tt.setNgayThanhToan(Instant.now());
-                tt.setMaGiaoDich((paid ? "PAYOS-" : FAILED_PREFIX) + orderCode);
+                tt.setMaGiaoDich((paid && !holdExpired ? "PAYOS-" : FAILED_PREFIX) + orderCode);
                 thanhToanRepository.save(tt);
             }
 
-            VeXe ve = tt.getVeXe();
             if (ve != null) {
-                if (paid) {
+                if (paid && !holdExpired) {
                     ve.setTrangThai(TicketStatus.DA_THANH_TOAN);
                     stripErroneousPayOsFailNote(ve);
+                } else if (paid && holdExpired) {
+                    ve.setTrangThai(TicketStatus.DA_HUY);
+                    ve.setGhiChu(com.banvexe.accountmanagement.util.TicketGhiChuUtil.ghiChuHuyThanhCong(
+                        "quá thời gian giữ chỗ " + bookingHoldPolicy.holdMinutes() + " phút"
+                    ));
                 } else if (ve.getTrangThai() != TicketStatus.DA_THANH_TOAN) {
                     ve.setTrangThai(TicketStatus.CHO_THANH_TOAN);
                 }

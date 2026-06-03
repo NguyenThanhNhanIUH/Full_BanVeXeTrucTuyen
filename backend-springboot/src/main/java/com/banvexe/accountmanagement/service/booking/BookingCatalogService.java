@@ -117,10 +117,18 @@ public class BookingCatalogService {
                 "Chuyến #" + c.getId() + ": xe không hợp lệ (thiếu hoặc số ghế = 0). Kiểm tra bảng Xe.chuyen_xe."
             );
         }
-        Set<String> occupied = new HashSet<>(chiTietVeRepository.findOccupiedSeatCodes(c.getId(), STATUSES_BLOCKING_SEAT));
+        Set<String> held = new HashSet<>(
+            chiTietVeRepository.findOccupiedSeatCodes(c.getId(), List.of(TicketStatus.CHO_THANH_TOAN))
+        );
+        Set<String> sold = new HashSet<>(
+            chiTietVeRepository.findOccupiedSeatCodes(
+                c.getId(),
+                List.of(TicketStatus.DA_THANH_TOAN, TicketStatus.DANG_XU_LY, TicketStatus.HOAN_THANH)
+            )
+        );
         List<String> labels = generateSeatLabels(c);
         List<SeatStatusDto> seats = labels.stream()
-            .map(l -> new SeatStatusDto(l, occupied.contains(l)))
+            .map(l -> new SeatStatusDto(l, sold.contains(l), held.contains(l)))
             .toList();
         return new SeatMapDto(soGhe, seats);
     }

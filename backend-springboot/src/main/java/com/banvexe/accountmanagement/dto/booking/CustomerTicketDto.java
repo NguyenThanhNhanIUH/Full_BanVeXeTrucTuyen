@@ -11,6 +11,7 @@ public record CustomerTicketDto(
     TicketStatus trangThai,
     BigDecimal tongTien,
     Instant ngayDat,
+    Instant holdExpiresAt,
     String ghiChu,
     List<String> maGhe,
     TripSummaryDto chuyen

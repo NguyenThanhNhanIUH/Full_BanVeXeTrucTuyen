@@ -4,9 +4,11 @@ import com.banvexe.accountmanagement.entity.ChuyenXe;
 import com.banvexe.accountmanagement.entity.RouteStatus;
 import com.banvexe.accountmanagement.entity.TripRunStatus;
 import java.time.LocalDate;
+import jakarta.persistence.LockModeType;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -40,6 +42,15 @@ public interface ChuyenXeRepository extends JpaRepository<ChuyenXe, Integer> {
         WHERE c.id = :id
         """)
     Optional<ChuyenXe> findByIdWithDetails(@Param("id") Integer id);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+        SELECT c FROM ChuyenXe c
+        JOIN FETCH c.tuyenXe
+        JOIN FETCH c.xe
+        WHERE c.id = :id
+        """)
+    Optional<ChuyenXe> findByIdWithDetailsForUpdate(@Param("id") Integer id);
 
     @Query("""
         SELECT c FROM ChuyenXe c

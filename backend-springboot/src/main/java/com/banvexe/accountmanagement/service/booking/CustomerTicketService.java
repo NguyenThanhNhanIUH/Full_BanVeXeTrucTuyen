@@ -49,6 +49,7 @@ public class CustomerTicketService {
     private final KhachHangRepository khachHangRepository;
     private final BookingCatalogService bookingCatalogService;
     private final BookingNotificationService bookingNotificationService;
+    private final BookingHoldPolicy bookingHoldPolicy;
 
     public CustomerTicketService(
         VeXeRepository veXeRepository,
@@ -58,7 +59,8 @@ public class CustomerTicketService {
         UserAccountRepository userAccountRepository,
         KhachHangRepository khachHangRepository,
         BookingCatalogService bookingCatalogService,
-        BookingNotificationService bookingNotificationService
+        BookingNotificationService bookingNotificationService,
+        BookingHoldPolicy bookingHoldPolicy
     ) {
         this.veXeRepository = veXeRepository;
         this.chuyenXeRepository = chuyenXeRepository;
@@ -68,6 +70,7 @@ public class CustomerTicketService {
         this.khachHangRepository = khachHangRepository;
         this.bookingCatalogService = bookingCatalogService;
         this.bookingNotificationService = bookingNotificationService;
+        this.bookingHoldPolicy = bookingHoldPolicy;
     }
 
     @Transactional
@@ -102,7 +105,7 @@ public class CustomerTicketService {
 
     private CustomerTicketDto bookForKhach(
         KhachHang kh, Integer chuyenXeId, List<String> rawSeats, String ghiChu) {
-        ChuyenXe chuyen = chuyenXeRepository.findByIdWithDetails(chuyenXeId)
+        ChuyenXe chuyen = chuyenXeRepository.findByIdWithDetailsForUpdate(chuyenXeId)
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Không tìm thấy chuyến xe"));
 
         if (chuyen.getTrangThai() != TripRunStatus.CHUA_KHOI_HANH) {
@@ -161,7 +164,6 @@ public class CustomerTicketService {
             ct.setSoGhe(seat);
             chiTietVeRepository.save(ct);
         }
-        bookingNotificationService.sendBookingSuccess(kh, ve);
 
         return toCustomerDto(veXeRepository.findByIdWithDetails(ve.getId()).orElse(ve));
     }
@@ -204,6 +206,7 @@ public class CustomerTicketService {
         if (ve.getTrangThai() != TicketStatus.CHO_THANH_TOAN) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Vé không ở trạng thái chờ thanh toán");
         }
+        bookingHoldPolicy.assertHoldActive(ve);
 
         ThanhToan tt = new ThanhToan();
         tt.setVeXe(ve);
@@ -311,13 +314,7 @@ public class CustomerTicketService {
         }
 
         if (ve.getTrangThai() == TicketStatus.CHO_THANH_TOAN) {
-            long hours = java.time.temporal.ChronoUnit.HOURS.between(ve.getNgayDat(), Instant.now());
-            if (hours > 2) {
-                throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
-                    "Vé không thể hủy: quá 2 giờ kể từ lúc đặt (vé chờ thanh toán)"
-                );
-            }
+            bookingHoldPolicy.assertHoldActive(ve);
             ve.setTrangThai(TicketStatus.DA_HUY);
             ve.setGhiChu(TicketGhiChuUtil.ghiChuHuyThanhCong("khách tự hủy, vé chưa thanh toán"));
             veXeRepository.saveAndFlush(ve);
@@ -409,6 +406,7 @@ public class CustomerTicketService {
             ve.getTrangThai(),
             ve.getTongTien(),
             ve.getNgayDat(),
+            bookingHoldPolicy.holdExpiresAt(ve),
             ve.getGhiChu(),
             seats,
             trip
@@ -423,6 +421,7 @@ public class CustomerTicketService {
             base.trangThai(),
             base.tongTien(),
             base.ngayDat(),
+            base.holdExpiresAt(),
             base.ghiChu(),
             kh.getFullName(),
             kh.getPhone(),

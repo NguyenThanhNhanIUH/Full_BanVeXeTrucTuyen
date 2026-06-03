@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import {
   getSeatLayoutByVehicleType,
   gheHienThiTrenBang,
+  isSeatUnavailable,
   type SeatMapResponse,
   type SeatStatus,
 } from '../../../utils/seatMapLayout';
@@ -178,17 +179,21 @@ const HomeTripCard = ({
                     const renderSeatButton = (seat: SeatStatus & { hienThiGhe?: string }, sizeClass = 'w-11 h-11 md:w-12 md:h-12') => {
                       if (!seat.maGhe) return null;
                       const selected = (gheDangChonTheoChuyen[trip.id] ?? []).includes(seat.maGhe);
+                      const unavailable = isSeatUnavailable(seat);
                       const seatClass = seat.daBan
                         ? 'bg-gray-200 text-gray-400 border-gray-300 cursor-not-allowed'
-                        : selected
-                          ? 'bg-[#fff3ef] text-[#ef5222] border-[#ef5222] cursor-pointer shadow-[0_2px_6px_rgba(239,82,34,0.2)]'
-                          : 'bg-blue-50 text-blue-500 border-blue-300 cursor-pointer hover:bg-blue-100';
+                        : seat.dangGiuCho
+                          ? 'bg-amber-100 text-amber-700 border-amber-300 cursor-not-allowed'
+                          : selected
+                            ? 'bg-[#fff3ef] text-[#ef5222] border-[#ef5222] cursor-pointer shadow-[0_2px_6px_rgba(239,82,34,0.2)]'
+                            : 'bg-blue-50 text-blue-500 border-blue-300 cursor-pointer hover:bg-blue-100';
                       return (
                         <button
                           key={seat.maGhe}
                           type="button"
                           onClick={() => onSelectSeat(trip.id, seat)}
-                          disabled={seat.daBan}
+                          disabled={unavailable}
+                          title={seat.dangGiuCho ? 'Ghế đang được giữ chỗ' : undefined}
                           className={`${sizeClass} text-[13px] font-bold rounded-lg border-2 leading-none transition ${seatClass}`}
                         >
                           {seat.hienThiGhe ?? seat.maGhe}

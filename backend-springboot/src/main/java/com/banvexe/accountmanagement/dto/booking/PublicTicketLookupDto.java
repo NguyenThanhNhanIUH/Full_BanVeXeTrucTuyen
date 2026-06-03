@@ -11,6 +11,7 @@ public record PublicTicketLookupDto(
     TicketStatus trangThai,
     BigDecimal tongTien,
     Instant ngayDat,
+    Instant holdExpiresAt,
     String ghiChu,
     String hoTenKhach,
     String soDienThoaiKhach,

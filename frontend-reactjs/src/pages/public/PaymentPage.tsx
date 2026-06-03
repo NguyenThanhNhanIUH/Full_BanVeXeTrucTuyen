@@ -19,6 +19,7 @@ type CreatedTicket = {
   maVe: string;
   trangThai: string;
   ngayDat?: string;
+  holdExpiresAt?: string;
 };
 
 type PaymentState = {
@@ -81,6 +82,12 @@ const formatDateTime = (trip?: TripPayload) => {
 
 const calcInitialRemainingSeconds = (createdTickets?: CreatedTicket[]) => {
   if (!createdTickets?.length) return HOLD_SECONDS;
+  const expiresAtMs = createdTickets
+    .map((ticket) => (ticket.holdExpiresAt ? new Date(ticket.holdExpiresAt).getTime() : NaN))
+    .filter((value) => Number.isFinite(value));
+  if (expiresAtMs.length > 0) {
+    return Math.max(0, Math.floor((Math.min(...expiresAtMs) - Date.now()) / 1000));
+  }
   const createdAtMs = createdTickets
     .map((ticket) => (ticket.ngayDat ? new Date(ticket.ngayDat).getTime() : NaN))
     .filter((value) => Number.isFinite(value));
