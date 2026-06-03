@@ -96,40 +96,20 @@ const HomePage = () => {
   const [routeDurationCache, setRouteDurationCache] = useState<Record<string, number>>({});
 
   useEffect(() => {
-    if (!diemDi.trim()) {
-      setGoiYDiemDi([]);
-      return;
-    }
-    const timeoutId = window.setTimeout(async () => {
+    void (async () => {
       try {
-        const { data } = await api.get<{ data?: string[] }>('/api/catalog/origins', {
-          params: { keyword: diemDi },
-        });
-        setGoiYDiemDi(data?.data ?? []);
+        const [originsRes, destinationsRes] = await Promise.all([
+          api.get<{ data?: string[] }>('/api/catalog/origins'),
+          api.get<{ data?: string[] }>('/api/catalog/destinations'),
+        ]);
+        setGoiYDiemDi(originsRes.data?.data ?? []);
+        setGoiYDiemDen(destinationsRes.data?.data ?? []);
       } catch {
         setGoiYDiemDi([]);
-      }
-    }, 250);
-    return () => window.clearTimeout(timeoutId);
-  }, [diemDi]);
-
-  useEffect(() => {
-    if (!diemDen.trim()) {
-      setGoiYDiemDen([]);
-      return;
-    }
-    const timeoutId = window.setTimeout(async () => {
-      try {
-        const { data } = await api.get<{ data?: string[] }>('/api/catalog/destinations', {
-          params: { keyword: diemDen },
-        });
-        setGoiYDiemDen(data?.data ?? []);
-      } catch {
         setGoiYDiemDen([]);
       }
-    }, 250);
-    return () => window.clearTimeout(timeoutId);
-  }, [diemDen]);
+    })();
+  }, []);
 
   const getRouteDurationFallback = async (trip: TripSummary): Promise<number | undefined> => {
     const key = `${trip.diemDi}|${trip.diemDen}|${trip.tenTuyen}`;

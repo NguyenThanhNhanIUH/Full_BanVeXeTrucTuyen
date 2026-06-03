@@ -85,21 +85,19 @@ const HomeSearchHero = ({
           <div className="lg:flex-[1.8]">
             <label className="block text-sm font-semibold text-gray-700 mb-1">Điểm đi</label>
             <div className="relative">
-              <MapPin className="absolute left-3 top-3 w-5 h-5 text-gray-400" />
-              <input
-                type="text"
-                autoComplete="off"
-                list={diemDi.trim() ? 'home-goi-y-diem-di' : undefined}
-                placeholder="Thành phố Hồ Chí Minh"
+              <MapPin className="absolute left-3 top-3 w-5 h-5 text-gray-400 pointer-events-none" />
+              <select
                 value={diemDi}
                 onChange={(e) => onDiemDiChange(e.target.value)}
-                className="w-full pl-10 pr-3 py-3 border rounded-lg focus:outline-none focus:border-[#ef5222]"
-              />
-              <datalist id="home-goi-y-diem-di">
+                className="w-full pl-10 pr-3 py-3 border rounded-lg focus:outline-none focus:border-[#ef5222] appearance-none bg-white text-gray-800"
+              >
+                <option value="">Chọn điểm đi</option>
                 {goiYDiemDi.map((item) => (
-                  <option key={item} value={item} />
+                  <option key={item} value={item}>
+                    {item}
+                  </option>
                 ))}
-              </datalist>
+              </select>
             </div>
           </div>
           <div className="flex justify-center lg:flex-none lg:pb-1">
@@ -116,21 +114,19 @@ const HomeSearchHero = ({
           <div className="lg:flex-[1.8]">
             <label className="block text-sm font-semibold text-gray-700 mb-1">Điểm đến</label>
             <div className="relative">
-              <MapPin className="absolute left-3 top-3 w-5 h-5 text-gray-400" />
-              <input
-                type="text"
-                autoComplete="off"
-                list={diemDen.trim() ? 'home-goi-y-diem-den' : undefined}
-                placeholder="Đồng Tháp"
+              <MapPin className="absolute left-3 top-3 w-5 h-5 text-gray-400 pointer-events-none" />
+              <select
                 value={diemDen}
                 onChange={(e) => onDiemDenChange(e.target.value)}
-                className="w-full pl-10 pr-3 py-3 border rounded-lg focus:outline-none focus:border-[#ef5222]"
-              />
-              <datalist id="home-goi-y-diem-den">
+                className="w-full pl-10 pr-3 py-3 border rounded-lg focus:outline-none focus:border-[#ef5222] appearance-none bg-white text-gray-800"
+              >
+                <option value="">Chọn điểm đến</option>
                 {goiYDiemDen.map((item) => (
-                  <option key={item} value={item} />
+                  <option key={item} value={item}>
+                    {item}
+                  </option>
                 ))}
-              </datalist>
+              </select>
             </div>
           </div>
           <div className="lg:flex-[1.15]">
