@@ -123,6 +123,14 @@ const TicketManagement: React.FC = () => {
     return () => document.removeEventListener('visibilitychange', onVis);
   }, [load, loadStats]);
 
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      void load();
+      void loadStats();
+    }, 20000);
+    return () => window.clearInterval(timer);
+  }, [load, loadStats]);
+
   const openEditModal = async (row: TicketRow) => {
     const id = row.id;
     setModalId(id);

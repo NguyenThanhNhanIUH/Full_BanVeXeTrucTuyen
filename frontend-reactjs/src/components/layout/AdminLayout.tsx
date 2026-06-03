@@ -45,7 +45,7 @@ const AdminLayout: React.FC = () => {
       }
     };
     void loadPending();
-    const timer = window.setInterval(() => void loadPending(), 60000);
+    const timer = window.setInterval(() => void loadPending(), 20000);
     return () => {
       active = false;
       window.clearInterval(timer);

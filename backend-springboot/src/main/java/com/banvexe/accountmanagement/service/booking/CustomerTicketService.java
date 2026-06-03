@@ -367,16 +367,25 @@ public class CustomerTicketService {
             );
         }
 
-        if (ve.getTrangThai() == TicketStatus.CHO_THANH_TOAN || ve.getTrangThai() == TicketStatus.DAT_TRUOC) {
-            TicketStatus previous = ve.getTrangThai();
+        if (ve.getTrangThai() == TicketStatus.CHO_THANH_TOAN) {
             bookingHoldPolicy.assertHoldActive(ve);
             ve.setTrangThai(TicketStatus.DA_HUY);
-            String reason = previous == TicketStatus.DAT_TRUOC
-                ? "khách tự hủy vé đặt trước"
-                : "khách tự hủy, vé chưa thanh toán";
-            ve.setGhiChu(TicketGhiChuUtil.ghiChuHuyThanhCong(reason));
+            ve.setGhiChu(TicketGhiChuUtil.ghiChuHuyThanhCong("khách tự hủy, vé chưa thanh toán"));
             veXeRepository.saveAndFlush(ve);
             return "Hủy vé thành công. Ghi chú vé đã được cập nhật.";
+        }
+
+        if (ve.getTrangThai() == TicketStatus.DAT_TRUOC) {
+            bookingHoldPolicy.assertHoldActive(ve);
+            String yeuCau = TicketGhiChuUtil.ghiChuYeuCauHuyChoDuyet();
+            int n = veXeRepository.updateGhiChuAndTrangThaiById(ve.getId(), yeuCau, TicketStatus.DANG_XU_LY);
+            if (n != 1) {
+                throw new ResponseStatusException(
+                    HttpStatus.INTERNAL_SERVER_ERROR,
+                    "Không cập nhật được yêu cầu hủy vé. Thử lại."
+                );
+            }
+            return "Gửi yêu cầu hủy vé đặt trước thành công. Nhân viên sẽ xử lý trong thời gian sớm nhất";
         }
 
         if (ve.getTrangThai() == TicketStatus.DA_THANH_TOAN) {

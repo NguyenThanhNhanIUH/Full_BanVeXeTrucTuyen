@@ -167,11 +167,11 @@ const CustomerTicketHistoryPage = () => {
       return;
     }
     const msg =
-      isPendingPayment(ticket.trangThai)
-        ? ticket.trangThai === 'DAT_TRUOC'
-          ? 'Xác nhận hủy vé đặt trước?'
-          : 'Xác nhận hủy vé chờ thanh toán?'
-        : 'Gửi yêu cầu hủy vé? Nhân viên sẽ duyệt.';
+      ticket.trangThai === 'CHO_THANH_TOAN'
+        ? 'Xác nhận hủy vé chờ thanh toán?'
+        : ticket.trangThai === 'DAT_TRUOC'
+          ? 'Gửi yêu cầu hủy vé đặt trước? Nhân viên sẽ duyệt.'
+          : 'Gửi yêu cầu hủy vé? Nhân viên sẽ duyệt.';
     if (!window.confirm(msg)) return;
     setRequestingId(ticket.id);
     setTicketInlineMsg((prev) => {
@@ -421,7 +421,7 @@ const CustomerTicketHistoryPage = () => {
                                 >
                                   {requestingId === ticket.id
                                     ? '…'
-                                    : isPendingPayment(ticket.trangThai)
+                                    : ticket.trangThai === 'CHO_THANH_TOAN'
                                       ? 'Hủy vé'
                                       : 'Yêu cầu hủy vé'}
                                 </button>

@@ -70,6 +70,11 @@ const CancelRequestsPage: React.FC = () => {
     return () => document.removeEventListener('visibilitychange', onVis);
   }, [load]);
 
+  useEffect(() => {
+    const timer = window.setInterval(() => void load(), 20000);
+    return () => window.clearInterval(timer);
+  }, [load]);
+
   const approve = async (id: number) => {
     if (!window.confirm('Duyệt hủy vé này? Vé sẽ chuyển sang trạng thái Đã hủy.')) return;
     setBusyId(id);

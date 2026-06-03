@@ -358,8 +358,8 @@ public class AssistantChatService {
             return Optional.of(faqWrap(
                 """
                 Hủy vé:
-                • Chưa thanh toán / đặt trước: hủy trực tiếp trên Tra cứu hoặc Lịch sử vé.
-                • Đã thanh toán: gửi yêu cầu hủy, nhân viên duyệt.""",
+                • Chờ thanh toán (5 phút): hủy trực tiếp trên Tra cứu hoặc Lịch sử vé.
+                • Đặt trước / đã thanh toán: gửi yêu cầu hủy, nhân viên duyệt.""",
                 List.of("Tra cứu vé của tôi", "Cách đặt trước?"),
                 List.of(navigateAction("/tra-cuu-ve", "Tra cứu vé"))
             ));
