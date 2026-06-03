@@ -45,10 +45,20 @@ class BookingHoldPolicyTest {
     }
 
     @Test
-    void assertHoldActive_allowsActiveHold() {
+    void holdExpiresAt_usesHanThanhToanForDeferredTicket() {
+        Instant deadline = Instant.parse("2026-07-01T10:00:00Z");
         VeXe ve = new VeXe();
-        ve.setTrangThai(TicketStatus.CHO_THANH_TOAN);
-        ve.setNgayDat(Instant.now());
+        ve.setTrangThai(TicketStatus.DAT_TRUOC);
+        ve.setHanThanhToan(deadline);
+
+        assertThat(policy.holdExpiresAt(ve)).isEqualTo(deadline);
+    }
+
+    @Test
+    void assertHoldActive_allowsActiveDeferredHold() {
+        VeXe ve = new VeXe();
+        ve.setTrangThai(TicketStatus.DAT_TRUOC);
+        ve.setHanThanhToan(Instant.now().plus(3, ChronoUnit.DAYS));
 
         policy.assertHoldActive(ve);
     }

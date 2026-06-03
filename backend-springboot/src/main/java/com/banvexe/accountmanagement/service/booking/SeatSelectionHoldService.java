@@ -177,7 +177,7 @@ public class SeatSelectionHoldService {
         }
         List<String> pendingPayment = chiTietVeRepository.findOccupiedSeatCodes(
             chuyen.getId(),
-            List.of(TicketStatus.CHO_THANH_TOAN)
+            List.of(TicketStatus.CHO_THANH_TOAN, TicketStatus.DAT_TRUOC)
         );
         if (pendingPayment.contains(seat)) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Ghế đang chờ thanh toán: " + seat);

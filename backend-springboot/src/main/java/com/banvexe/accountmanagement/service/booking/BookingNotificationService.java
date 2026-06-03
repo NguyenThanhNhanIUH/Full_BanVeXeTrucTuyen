@@ -105,6 +105,29 @@ public class BookingNotificationService {
         sendSafe(toEmail, subject, body);
     }
 
+    public void sendDeferredBookingSuccess(KhachHang khach, VeXe ticket, Instant hanThanhToan) {
+        String toEmail = khach != null ? khach.getEmail() : null;
+        String fullName = khach != null ? khach.getFullName() : null;
+        if (!isValidEmail(toEmail)) return;
+        List<TicketEmailRow> rows = collectRows(List.of(ticket));
+        BigDecimal total = rows.stream().map(TicketEmailRow::tongTien).reduce(BigDecimal.ZERO, BigDecimal::add);
+        String deadline = hanThanhToan != null ? INSTANT_FMT.format(hanThanhToan) : "—";
+        String subject = "[BanVeXe] Đặt trước thành công - " + safe(ticket.getMaVe());
+        String body = buildDeferredBookingHtml(fullName, rows, total, deadline);
+        sendSafe(toEmail, subject, body);
+    }
+
+    public void sendPaymentReminder(KhachHang khach, VeXe ticket, long daysLeft) {
+        String toEmail = khach != null ? khach.getEmail() : null;
+        String fullName = khach != null ? khach.getFullName() : null;
+        if (!isValidEmail(toEmail)) return;
+        List<TicketEmailRow> rows = collectRows(List.of(ticket));
+        String deadline = ticket.getHanThanhToan() != null ? INSTANT_FMT.format(ticket.getHanThanhToan()) : "—";
+        String subject = "[BanVeXe] Nhắc thanh toán vé - còn " + daysLeft + " ngày";
+        String body = buildPaymentReminderHtml(fullName, rows, daysLeft, deadline);
+        sendSafe(toEmail, subject, body);
+    }
+
     public void sendPaymentSuccess(KhachHang khach, List<VeXe> tickets, String paymentRef) {
         String toEmail = khach != null ? khach.getEmail() : null;
         String fullName = khach != null ? khach.getFullName() : null;
@@ -443,10 +466,99 @@ public class BookingNotificationService {
             .collect(Collectors.joining());
     }
 
+    private String buildDeferredBookingHtml(String fullName, List<TicketEmailRow> rows, BigDecimal total, String deadline) {
+        String ticketTable = buildTicketTableRows(rows);
+        return """
+            <div style="margin:0;padding:24px;background:#f6f8fb;font-family:Arial,Helvetica,sans-serif;color:#1f2937;">
+              <div style="max-width:720px;margin:0 auto;background:#ffffff;border:1px solid #e5e7eb;border-radius:12px;overflow:hidden;">
+                <div style="background:linear-gradient(135deg,%s,%s);padding:20px 24px;color:#ffffff;">
+                  %s
+                  <h2 style="margin:0;font-size:22px;">Đặt trước thành công</h2>
+                  <p style="margin:8px 0 0 0;font-size:14px;opacity:.95;">Ghế đã được giữ cho bạn.</p>
+                </div>
+                <div style="padding:24px;">
+                  <p style="margin:0 0 16px 0;font-size:15px;">Xin chào <strong>%s</strong>,</p>
+                  <p style="margin:0 0 18px 0;font-size:15px;line-height:1.6;">
+                    Vé của bạn đang ở trạng thái <strong>đặt trước</strong>. Hạn thanh toán: <strong>%s</strong>.
+                    Hệ thống sẽ gửi email và thông báo tài khoản nhắc bạn trước ngày đến hạn.
+                  </p>
+                  <p style="margin:0 0 12px 0;font-size:15px;">Tổng tiền: <strong style="color:#065f46;">%s</strong></p>
+                  <div style="margin-top:16px;display:flex;gap:10px;flex-wrap:wrap;">
+                    <a href="%s" style="display:inline-block;background:%s;color:#fff;text-decoration:none;padding:10px 14px;border-radius:8px;font-size:13px;font-weight:600;">Thanh toán / tra cứu vé</a>
+                    <a href="%s" style="display:inline-block;background:#ffffff;color:%s;text-decoration:none;padding:10px 14px;border-radius:8px;font-size:13px;font-weight:600;border:1px solid %s;">Lịch sử đặt vé</a>
+                  </div>
+                  <div style="margin-top:16px;overflow:auto;">
+                    <table style="width:100%%;border-collapse:collapse;font-size:13px;">
+                      <thead><tr style="background:#fff7ed;">
+                        <th style="border:1px solid #e5e7eb;padding:8px;">Tuyến</th>
+                        <th style="border:1px solid #e5e7eb;padding:8px;">Ngày đi</th>
+                        <th style="border:1px solid #e5e7eb;padding:8px;">Ghế</th>
+                      </tr></thead>
+                      <tbody>%s</tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            </div>
+            """.formatted(
+            safeColor(primaryColor),
+            safeColor(secondaryColor),
+            logoBlock(),
+            safe(fullName),
+            deadline,
+            formatCurrency(total),
+            safeUrl(ticketLookupUrl),
+            safeColor(primaryColor),
+            safeUrl(historyUrl),
+            safeColor(primaryColor),
+            safeColor(primaryColor),
+            ticketTable
+        );
+    }
+
+    private String buildPaymentReminderHtml(String fullName, List<TicketEmailRow> rows, long daysLeft, String deadline) {
+        String ticketTable = buildTicketTableRows(rows);
+        return """
+            <div style="margin:0;padding:24px;background:#f6f8fb;font-family:Arial,Helvetica,sans-serif;color:#1f2937;">
+              <div style="max-width:720px;margin:0 auto;background:#ffffff;border:1px solid #e5e7eb;border-radius:12px;overflow:hidden;">
+                <div style="background:linear-gradient(135deg,#f59e0b,#ef5222);padding:20px 24px;color:#ffffff;">
+                  %s
+                  <h2 style="margin:0;font-size:22px;">Nhắc thanh toán vé</h2>
+                  <p style="margin:8px 0 0 0;font-size:14px;opacity:.95;">Còn %d ngày đến hạn thanh toán.</p>
+                </div>
+                <div style="padding:24px;">
+                  <p style="margin:0 0 16px 0;font-size:15px;">Xin chào <strong>%s</strong>,</p>
+                  <p style="margin:0 0 18px 0;font-size:15px;line-height:1.6;">
+                    Vé đặt trước của bạn sắp đến hạn thanh toán (<strong>%s</strong>).
+                    Vui lòng thanh toán sớm để tránh bị hủy vé và mất ghế.
+                  </p>
+                  <div style="margin-top:16px;display:flex;gap:10px;flex-wrap:wrap;">
+                    <a href="%s" style="display:inline-block;background:%s;color:#fff;text-decoration:none;padding:10px 14px;border-radius:8px;font-size:13px;font-weight:600;">Thanh toán ngay</a>
+                  </div>
+                  <div style="margin-top:16px;overflow:auto;">
+                    <table style="width:100%%;border-collapse:collapse;font-size:13px;">
+                      <tbody>%s</tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            </div>
+            """.formatted(
+            logoBlock(),
+            daysLeft,
+            safe(fullName),
+            deadline,
+            safeUrl(historyUrl),
+            safeColor(primaryColor),
+            ticketTable
+        );
+    }
+
     private String mapStatus(TicketStatus status) {
         if (status == null) return "Không xác định";
         return switch (status) {
             case CHO_THANH_TOAN -> "Chờ thanh toán";
+            case DAT_TRUOC -> "Đặt trước - chờ thanh toán";
             case DA_THANH_TOAN -> "Đã thanh toán";
             case DANG_XU_LY -> "Đang xử lý";
             case DA_HUY -> "Đã hủy";

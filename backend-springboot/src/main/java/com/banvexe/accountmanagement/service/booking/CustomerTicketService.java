@@ -51,6 +51,8 @@ public class CustomerTicketService {
     private final BookingNotificationService bookingNotificationService;
     private final BookingHoldPolicy bookingHoldPolicy;
     private final SeatSelectionHoldService seatSelectionHoldService;
+    private final DeferredBookingPolicy deferredBookingPolicy;
+    private final CustomerNotificationService customerNotificationService;
 
     public CustomerTicketService(
         VeXeRepository veXeRepository,
@@ -62,7 +64,9 @@ public class CustomerTicketService {
         BookingCatalogService bookingCatalogService,
         BookingNotificationService bookingNotificationService,
         BookingHoldPolicy bookingHoldPolicy,
-        SeatSelectionHoldService seatSelectionHoldService
+        SeatSelectionHoldService seatSelectionHoldService,
+        DeferredBookingPolicy deferredBookingPolicy,
+        CustomerNotificationService customerNotificationService
     ) {
         this.veXeRepository = veXeRepository;
         this.chuyenXeRepository = chuyenXeRepository;
@@ -74,6 +78,8 @@ public class CustomerTicketService {
         this.bookingNotificationService = bookingNotificationService;
         this.bookingHoldPolicy = bookingHoldPolicy;
         this.seatSelectionHoldService = seatSelectionHoldService;
+        this.deferredBookingPolicy = deferredBookingPolicy;
+        this.customerNotificationService = customerNotificationService;
     }
 
     @Transactional
@@ -81,13 +87,13 @@ public class CustomerTicketService {
         var user = userAccountRepository.findByEmail(normalizeEmail(email))
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Không tìm thấy tài khoản"));
         KhachHang kh = requireKhachForLoggedIn(user);
-        return bookForKhach(kh, req.chuyenXeId(), req.maGhe(), req.ghiChu(), req.holdToken());
+        return bookForKhach(kh, req.chuyenXeId(), req.maGhe(), req.ghiChu(), req.holdToken(), Boolean.TRUE.equals(req.datTruoc()));
     }
 
     @Transactional
     public CustomerTicketDto bookGuest(GuestBookTicketRequest req) {
         KhachHang kh = resolveOrCreateGuestProfile(req.email(), req.soDienThoai(), req.hoTen());
-        return bookForKhach(kh, req.chuyenXeId(), req.maGhe(), req.ghiChu(), req.holdToken());
+        return bookForKhach(kh, req.chuyenXeId(), req.maGhe(), req.ghiChu(), req.holdToken(), Boolean.TRUE.equals(req.datTruoc()));
     }
 
     private KhachHang requireKhachForLoggedIn(UserAccount user) {
@@ -107,7 +113,7 @@ public class CustomerTicketService {
     }
 
     private CustomerTicketDto bookForKhach(
-        KhachHang kh, Integer chuyenXeId, List<String> rawSeats, String ghiChu, String holdToken) {
+        KhachHang kh, Integer chuyenXeId, List<String> rawSeats, String ghiChu, String holdToken, boolean datTruoc) {
         ChuyenXe chuyen = chuyenXeRepository.findByIdWithDetailsForUpdate(chuyenXeId)
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Không tìm thấy chuyến xe"));
 
@@ -150,6 +156,10 @@ public class CustomerTicketService {
         }
         seatSelectionHoldService.assertSeatsNotHeldByOthers(chuyen.getId(), holdToken, seats);
 
+        if (datTruoc) {
+            deferredBookingPolicy.assertEligibleForDeferred(chuyen);
+        }
+
         BigDecimal tong = chuyen.getGiaVe().multiply(BigDecimal.valueOf(seats.size()));
         VeXe ve = new VeXe();
         ve.setMaVe(generateMaVe());
@@ -158,8 +168,15 @@ public class CustomerTicketService {
         ve.setNgayDat(Instant.now());
         ve.setSoLuongGhe(seats.size());
         ve.setTongTien(tong);
-        ve.setTrangThai(TicketStatus.CHO_THANH_TOAN);
-        ve.setGhiChu(ghiChu);
+        if (datTruoc) {
+            Instant hanThanhToan = deferredBookingPolicy.computePaymentDeadline(chuyen);
+            ve.setTrangThai(TicketStatus.DAT_TRUOC);
+            ve.setHanThanhToan(hanThanhToan);
+            ve.setGhiChu(appendGhiChu(ghiChu, "Đặt trước - hạn thanh toán " + deferredBookingPolicy.payDaysBefore() + " ngày trước ngày đi"));
+        } else {
+            ve.setTrangThai(TicketStatus.CHO_THANH_TOAN);
+            ve.setGhiChu(ghiChu);
+        }
         veXeRepository.save(ve);
 
         for (String seat : seats) {
@@ -170,7 +187,22 @@ public class CustomerTicketService {
         }
         seatSelectionHoldService.releaseSeats(chuyen.getId(), seats);
 
-        return toCustomerDto(veXeRepository.findByIdWithDetails(ve.getId()).orElse(ve));
+        VeXe saved = veXeRepository.findByIdWithDetails(ve.getId()).orElse(ve);
+        if (datTruoc) {
+            bookingNotificationService.sendDeferredBookingSuccess(kh, saved, saved.getHanThanhToan());
+            customerNotificationService.notifyDeferredBooking(kh, saved);
+        } else {
+            bookingNotificationService.sendBookingSuccess(kh, saved);
+        }
+
+        return toCustomerDto(saved);
+    }
+
+    private String appendGhiChu(String base, String extra) {
+        if (base == null || base.isBlank()) {
+            return extra;
+        }
+        return base + " | " + extra;
     }
 
     @Transactional
@@ -208,7 +240,7 @@ public class CustomerTicketService {
         if (!ve.getKhachHangId().equals(kh.getId())) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Không phải vé của bạn");
         }
-        if (ve.getTrangThai() != TicketStatus.CHO_THANH_TOAN) {
+        if (!bookingHoldPolicy.isPendingPayment(ve)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Vé không ở trạng thái chờ thanh toán");
         }
         bookingHoldPolicy.assertHoldActive(ve);
@@ -318,10 +350,14 @@ public class CustomerTicketService {
             );
         }
 
-        if (ve.getTrangThai() == TicketStatus.CHO_THANH_TOAN) {
+        if (ve.getTrangThai() == TicketStatus.CHO_THANH_TOAN || ve.getTrangThai() == TicketStatus.DAT_TRUOC) {
+            TicketStatus previous = ve.getTrangThai();
             bookingHoldPolicy.assertHoldActive(ve);
             ve.setTrangThai(TicketStatus.DA_HUY);
-            ve.setGhiChu(TicketGhiChuUtil.ghiChuHuyThanhCong("khách tự hủy, vé chưa thanh toán"));
+            String reason = previous == TicketStatus.DAT_TRUOC
+                ? "khách tự hủy vé đặt trước"
+                : "khách tự hủy, vé chưa thanh toán";
+            ve.setGhiChu(TicketGhiChuUtil.ghiChuHuyThanhCong(reason));
             veXeRepository.saveAndFlush(ve);
             return "Hủy vé thành công. Ghi chú vé đã được cập nhật.";
         }

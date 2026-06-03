@@ -36,6 +36,7 @@ public class BookingCatalogService {
 
     public static final List<TicketStatus> STATUSES_BLOCKING_SEAT = List.of(
         TicketStatus.CHO_THANH_TOAN,
+        TicketStatus.DAT_TRUOC,
         TicketStatus.DA_THANH_TOAN,
         TicketStatus.DANG_XU_LY,
         TicketStatus.HOAN_THANH
@@ -214,7 +215,7 @@ public class BookingCatalogService {
         }
         Set<String> myTemporaryHolds = resolveMyTemporaryHolds(c.getId(), holdToken);
         Set<String> held = new HashSet<>(
-            chiTietVeRepository.findOccupiedSeatCodes(c.getId(), List.of(TicketStatus.CHO_THANH_TOAN))
+            chiTietVeRepository.findOccupiedSeatCodes(c.getId(), List.of(TicketStatus.CHO_THANH_TOAN, TicketStatus.DAT_TRUOC))
         );
         giuGheTamRepository.findByChuyenXeIdAndExpiresAtAfter(c.getId(), Instant.now())
             .forEach(h -> {

@@ -23,7 +23,13 @@ public class BookingHoldPolicy {
     }
 
     public Instant holdExpiresAt(VeXe ve) {
-        if (ve == null || ve.getNgayDat() == null || ve.getTrangThai() != TicketStatus.CHO_THANH_TOAN) {
+        if (ve == null) {
+            return null;
+        }
+        if (ve.getTrangThai() == TicketStatus.DAT_TRUOC) {
+            return ve.getHanThanhToan();
+        }
+        if (ve.getNgayDat() == null || ve.getTrangThai() != TicketStatus.CHO_THANH_TOAN) {
             return null;
         }
         return ve.getNgayDat().plus(holdMinutes, ChronoUnit.MINUTES);
@@ -35,11 +41,28 @@ public class BookingHoldPolicy {
     }
 
     public void assertHoldActive(VeXe ve) {
+        if (ve == null) {
+            throw new ResponseStatusException(HttpStatus.GONE, "Vé không hợp lệ.");
+        }
+        if (ve.getTrangThai() == TicketStatus.DAT_TRUOC) {
+            Instant deadline = ve.getHanThanhToan();
+            if (deadline == null || Instant.now().isAfter(deadline)) {
+                throw new ResponseStatusException(
+                    HttpStatus.GONE,
+                    "Vé đặt trước đã quá hạn thanh toán. Vui lòng đặt lại."
+                );
+            }
+            return;
+        }
         if (isHoldExpired(ve)) {
             throw new ResponseStatusException(
                 HttpStatus.GONE,
                 "Vé đã hết thời gian giữ chỗ (" + holdMinutes + " phút). Vui lòng đặt lại."
             );
         }
+    }
+
+    public boolean isPendingPayment(VeXe ve) {
+        return ve != null && (ve.getTrangThai() == TicketStatus.CHO_THANH_TOAN || ve.getTrangThai() == TicketStatus.DAT_TRUOC);
     }
 }

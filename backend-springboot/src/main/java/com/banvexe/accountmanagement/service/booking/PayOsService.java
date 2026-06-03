@@ -105,7 +105,7 @@ public class PayOsService {
             if (!ve.getKhachHangId().equals(khach.getId())) {
                 throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Có vé không thuộc tài khoản khách hàng");
             }
-            if (ve.getTrangThai() != TicketStatus.CHO_THANH_TOAN) {
+            if (!bookingHoldPolicy.isPendingPayment(ve)) {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Chỉ hỗ trợ thanh toán vé chờ thanh toán");
             }
             bookingHoldPolicy.assertHoldActive(ve);

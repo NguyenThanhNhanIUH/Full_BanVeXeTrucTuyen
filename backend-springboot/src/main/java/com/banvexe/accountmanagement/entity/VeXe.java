@@ -53,4 +53,8 @@ public class VeXe {
 
     @Column(name = "ghi_chu", columnDefinition = "TEXT")
     private String ghiChu;
+
+    /** Hạn thanh toán cho vé đặt trước (DAT_TRUOC). */
+    @Column(name = "han_thanh_toan")
+    private Instant hanThanhToan;
 }

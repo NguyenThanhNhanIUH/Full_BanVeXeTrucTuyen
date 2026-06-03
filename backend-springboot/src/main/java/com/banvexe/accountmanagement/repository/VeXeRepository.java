@@ -30,6 +30,11 @@ public interface VeXeRepository extends JpaRepository<VeXe, Integer> {
 
     List<VeXe> findTop200ByTrangThaiAndNgayDatBeforeOrderByNgayDatAsc(TicketStatus trangThai, Instant cutoff);
 
+    List<VeXe> findTop200ByTrangThaiAndHanThanhToanBeforeOrderByHanThanhToanAsc(TicketStatus trangThai, Instant cutoff);
+
+    @Query("SELECT v FROM VeXe v JOIN FETCH v.chuyenXe c JOIN FETCH c.tuyenXe WHERE v.trangThai = :st")
+    List<VeXe> findAllByTrangThaiWithTrip(@Param("st") TicketStatus st);
+
     Optional<VeXe> findByIdAndKhachHangId(Integer id, Integer khachHangId);
 
     @Query("""

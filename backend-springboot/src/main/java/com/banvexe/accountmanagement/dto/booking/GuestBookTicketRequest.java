@@ -14,6 +14,7 @@ public record GuestBookTicketRequest(
     @NotBlank @Email @Size(max = 100) String email,
     @NotBlank @Size(max = 20) String soDienThoai,
     @NotBlank @Size(max = 100) String hoTen,
-    @Size(max = 64) String holdToken
+    @Size(max = 64) String holdToken,
+    Boolean datTruoc
 ) {
 }

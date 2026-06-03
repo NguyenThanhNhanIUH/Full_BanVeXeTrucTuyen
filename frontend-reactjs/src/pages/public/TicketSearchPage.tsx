@@ -7,6 +7,7 @@ import TripTrackingSection from '../../components/maps/TripTrackingSection';
 type TicketSearchLocationState = {
   highlightedTicketCodes?: string[];
   prefilledPhone?: string;
+  deferredSuccess?: boolean;
 };
 
 type TripSummary = {
@@ -33,6 +34,7 @@ type TicketLookup = {
   trangThai: string;
   tongTien: number;
   ngayDat?: string;
+  holdExpiresAt?: string;
   ghiChu?: string;
   hoTenKhach?: string;
   soDienThoaiKhach?: string;
@@ -69,6 +71,8 @@ const buildTicketQrUrl = (ticketCode?: string) => {
   return `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(payload)}`;
 };
 
+const isPendingPayment = (status?: string) => status === 'CHO_THANH_TOAN' || status === 'DAT_TRUOC';
+
 const canShowTripTracking = (status?: string) => status !== 'DA_HUY';
 
 const TicketSearchPage = () => {
@@ -80,6 +84,7 @@ const TicketSearchPage = () => {
     [state.highlightedTicketCodes],
   );
   const prefilledPhoneFromNav = (state.prefilledPhone ?? '').trim();
+  const deferredSuccess = Boolean(state.deferredSuccess);
 
   const [phone, setPhone] = useState(prefilledPhoneFromNav);
   const [ticketCode, setTicketCode] = useState(highlightedCodes[0] ?? '');
@@ -148,7 +153,7 @@ const TicketSearchPage = () => {
 
   const canRequestCancel = (ticket?: TicketLookup | null) => {
     if (!ticket) return false;
-    if (ticket.trangThai === 'CHO_THANH_TOAN') return true;
+    if (isPendingPayment(ticket.trangThai)) return true;
     if (ticket.trangThai === 'DA_THANH_TOAN') return true;
     return false;
   };
@@ -167,8 +172,10 @@ const TicketSearchPage = () => {
         return;
       }
       const msg =
-        ticketResult.trangThai === 'CHO_THANH_TOAN'
-          ? 'Xác nhận hủy vé chờ thanh toán?'
+        isPendingPayment(ticketResult.trangThai)
+          ? ticketResult.trangThai === 'DAT_TRUOC'
+            ? 'Xác nhận hủy vé đặt trước?'
+            : 'Xác nhận hủy vé chờ thanh toán?'
           : 'Gửi yêu cầu hủy vé? Nhân viên sẽ duyệt.';
       if (!window.confirm(msg)) return;
       setDangHuy(true);
@@ -197,7 +204,7 @@ const TicketSearchPage = () => {
   };
 
   const onRetryPayment = () => {
-    if (!ticketResult || ticketResult.trangThai !== 'CHO_THANH_TOAN' || !ticketResult.chuyen?.id) return;
+    if (!ticketResult || !isPendingPayment(ticketResult.trangThai) || !ticketResult.chuyen?.id) return;
     navigate('/thanh-toan', {
       state: {
         tripType: 'one-way',
@@ -239,6 +246,11 @@ const TicketSearchPage = () => {
         </div>
 
         <div className="w-full rounded-3xl bg-white p-6 shadow-xl shadow-orange-100/60 ring-1 ring-[#ef5222]/10 md:p-8">
+          {deferredSuccess && (
+            <div className="mb-6 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
+              Đặt trước thành công! Ghế đã được giữ. Vui lòng thanh toán trước hạn (hệ thống sẽ gửi email nhắc).
+            </div>
+          )}
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
             <section className="lg:col-span-5">
               <h3 className="mb-4 text-xl font-semibold text-[#ef5222]">Tra cứu vé</h3>
@@ -379,13 +391,13 @@ const TicketSearchPage = () => {
                     {ticketResult.ghiChu && <p className="mt-3 text-sm text-gray-500">Ghi chú: {ticketResult.ghiChu}</p>}
                     <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                       <div className="flex flex-wrap items-center gap-2">
-                        {ticketResult.trangThai === 'CHO_THANH_TOAN' && (
+                        {isPendingPayment(ticketResult.trangThai) && (
                           <button
                             type="button"
                             onClick={onRetryPayment}
                             className="rounded-full border border-[#ef5222] bg-white px-4 py-2 text-sm font-semibold text-[#ef5222] transition hover:bg-[#fff0ea]"
                           >
-                            Thanh toán lại
+                            {ticketResult.trangThai === 'DAT_TRUOC' ? 'Thanh toán ngay' : 'Thanh toán lại'}
                           </button>
                         )}
                         <button

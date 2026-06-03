@@ -54,6 +54,7 @@ public class SecurityConfig {
                 .requestMatchers("/api/accounts/me/**").authenticated()
                 .requestMatchers("/api/auth/me").authenticated()
                 .requestMatchers("/api/me/booking/**").hasRole("KHACH_HANG")
+                .requestMatchers("/api/me/notifications/**").hasRole("KHACH_HANG")
                 .requestMatchers("/api/staff/**").hasAnyRole("NHAN_VIEN", "QUAN_TRI")
                 .requestMatchers(HttpMethod.GET, "/api/manager/trips", "/api/manager/routes", "/api/manager/vehicles", "/api/manager/tickets", "/api/manager/tickets/stats", "/api/manager/revenue/**")
                     .hasAnyRole("NHAN_VIEN", "QUAN_TRI")

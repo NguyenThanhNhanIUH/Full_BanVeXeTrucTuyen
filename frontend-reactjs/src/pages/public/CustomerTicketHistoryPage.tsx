@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link, Navigate, useNavigate } from 'react-router-dom';
+import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { api } from '../../api/client';
 import { getStoredEmail, getStoredName, getStoredPhone, getStoredRole, getToken } from '../../auth/storage';
 import CustomerAccountShell from '../../components/account/CustomerAccountShell';
@@ -25,9 +25,18 @@ type TicketItem = {
   trangThai: string;
   tongTien: number;
   ngayDat?: string;
+  holdExpiresAt?: string;
   maGhe?: string[];
   ghiChu?: string;
   chuyen?: TripSummary;
+};
+
+const isPendingPayment = (status: string) => status === 'CHO_THANH_TOAN' || status === 'DAT_TRUOC';
+
+const formatStatusLabel = (status: string) => {
+  if (status === 'DAT_TRUOC') return 'Đặt trước';
+  if (status === 'CHO_THANH_TOAN') return 'Chờ TT';
+  return status;
 };
 
 /** Từ chối hủy: bản cũ có ngoặc, bản mới một dòng "Từ chối hủy: lý do — thời gian". */
@@ -81,6 +90,8 @@ const formatInstant = (value?: string) => {
 
 const CustomerTicketHistoryPage = () => {
   const navigate = useNavigate();
+  const location = useLocation();
+  const deferredSuccess = Boolean((location.state as { deferredSuccess?: boolean } | null)?.deferredSuccess);
   const role = getStoredRole();
   const token = getToken();
   const [loading, setLoading] = useState(true);
@@ -96,7 +107,7 @@ const CustomerTicketHistoryPage = () => {
   >({});
 
   const retryPayment = (ticket: TicketItem) => {
-    if (ticket.trangThai !== 'CHO_THANH_TOAN' || !ticket.chuyen?.id) return;
+    if (!isPendingPayment(ticket.trangThai) || !ticket.chuyen?.id) return;
     navigate('/thanh-toan', {
       state: {
         tripType: 'one-way',
@@ -130,7 +141,7 @@ const CustomerTicketHistoryPage = () => {
 
   const canRequestCancel = (t: TicketItem) => {
     if (t.trangThai === 'DANG_XU_LY') return false;
-    if (t.trangThai === 'CHO_THANH_TOAN') return true;
+    if (isPendingPayment(t.trangThai)) return true;
     if (t.trangThai !== 'DA_THANH_TOAN') return false;
     if (t.ngayDat) {
       const h = (nowMs - new Date(t.ngayDat).getTime()) / 3600000;
@@ -156,8 +167,10 @@ const CustomerTicketHistoryPage = () => {
       return;
     }
     const msg =
-      ticket.trangThai === 'CHO_THANH_TOAN'
-        ? 'Xác nhận hủy vé chờ thanh toán?'
+      isPendingPayment(ticket.trangThai)
+        ? ticket.trangThai === 'DAT_TRUOC'
+          ? 'Xác nhận hủy vé đặt trước?'
+          : 'Xác nhận hủy vé chờ thanh toán?'
         : 'Gửi yêu cầu hủy vé? Nhân viên sẽ duyệt.';
     if (!window.confirm(msg)) return;
     setRequestingId(ticket.id);
@@ -256,6 +269,11 @@ const CustomerTicketHistoryPage = () => {
         </Link>
       }
     >
+      {deferredSuccess && (
+        <div className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
+          Đặt trước thành công! Ghế đã được giữ. Hệ thống sẽ nhắc bạn qua email và thông báo tài khoản trước hạn thanh toán.
+        </div>
+      )}
       <div className="rounded-2xl border border-gray-200 bg-white p-5">
         <div className="mb-4 grid gap-3 md:grid-cols-4">
           <input
@@ -333,9 +351,16 @@ const CustomerTicketHistoryPage = () => {
                           <td className="px-4 py-3">{formatDateTime(ticket.chuyen?.ngayDi, ticket.chuyen?.gioDi)}</td>
                           <td className="px-4 py-3 font-semibold text-[#00613d]">{formatCurrency(ticket.tongTien)}</td>
                           <td className="px-4 py-3">
-                            <span className="rounded-full bg-[#fff0ea] px-2.5 py-1 text-xs font-semibold text-[#ef5222]">
-                              {ticket.trangThai}
-                            </span>
+                            <div className="flex flex-col gap-1">
+                              <span className="rounded-full bg-[#fff0ea] px-2.5 py-1 text-xs font-semibold text-[#ef5222] w-fit">
+                                {formatStatusLabel(ticket.trangThai)}
+                              </span>
+                              {ticket.trangThai === 'DAT_TRUOC' && ticket.holdExpiresAt && (
+                                <span className="text-[11px] text-gray-500">
+                                  Hạn TT: {formatInstant(ticket.holdExpiresAt)}
+                                </span>
+                              )}
+                            </div>
                           </td>
                           <td className="px-4 py-3 align-top">
                             <div className="flex min-w-0 max-w-xs flex-col gap-1.5">
@@ -378,13 +403,13 @@ const CustomerTicketHistoryPage = () => {
                           </td>
                           <td className="px-4 py-3 align-top">
                             <div className="flex flex-col gap-2">
-                              {ticket.trangThai === 'CHO_THANH_TOAN' && (
+                              {isPendingPayment(ticket.trangThai) && (
                                 <button
                                   type="button"
                                   onClick={() => retryPayment(ticket)}
                                   className="rounded-lg border border-[#ef5222] bg-white px-2.5 py-1.5 text-xs font-semibold text-[#ef5222] hover:bg-[#fff0ea]"
                                 >
-                                  Thanh toán lại
+                                  {ticket.trangThai === 'DAT_TRUOC' ? 'Thanh toán ngay' : 'Thanh toán lại'}
                                 </button>
                               )}
                               {canRequestCancel(ticket) && (
@@ -396,12 +421,12 @@ const CustomerTicketHistoryPage = () => {
                                 >
                                   {requestingId === ticket.id
                                     ? '…'
-                                    : ticket.trangThai === 'CHO_THANH_TOAN'
+                                    : isPendingPayment(ticket.trangThai)
                                       ? 'Hủy vé'
                                       : 'Yêu cầu hủy vé'}
                                 </button>
                               )}
-                              {ticket.trangThai !== 'CHO_THANH_TOAN' && !canRequestCancel(ticket) && (
+                              {!isPendingPayment(ticket.trangThai) && !canRequestCancel(ticket) && (
                                 <span className="text-xs text-gray-400">—</span>
                               )}
                             </div>

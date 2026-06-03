@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { api } from '../../api/client';
-import { User, Phone, Mail, MapPin, Menu, X, UserCircle2, History, KeyRound, LogOut, ChevronDown } from 'lucide-react';
+import { User, Phone, Mail, MapPin, Menu, X, UserCircle2, History, KeyRound, LogOut, ChevronDown, Bell } from 'lucide-react';
 import { clearAuth, getStoredEmail, getStoredName, getStoredRole } from '../../auth/storage';
 import type { PublicBranding } from '../../types/publicBranding';
 import logoImage from '../../assets/logo.png';
@@ -9,11 +9,27 @@ import HelpBubble from '../common/HelpBubble';
 
 const defaultBranding: PublicBranding = { logoUrl: null, bannerUrl: null };
 
+type CustomerNotification = {
+  id: number;
+  tieuDe: string;
+  noiDung: string;
+  loai?: string;
+  veXeId?: number;
+  daDoc: boolean;
+  createdAt?: string;
+};
+
+type ApiResponse<T> = { code: number; message: string; data: T };
+
 const PublicLayout = () => {
   const [branding, setBranding] = useState<PublicBranding>(defaultBranding);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
+  const [isNotifOpen, setIsNotifOpen] = useState(false);
+  const [notifications, setNotifications] = useState<CustomerNotification[]>([]);
+  const [unreadCount, setUnreadCount] = useState(0);
   const profileMenuRef = useRef<HTMLDivElement | null>(null);
+  const notifMenuRef = useRef<HTMLDivElement | null>(null);
   const closeMenuTimerRef = useRef<number | null>(null);
   const location = useLocation();
   const navigate = useNavigate();
@@ -21,6 +37,7 @@ const PublicLayout = () => {
   const userEmail = getStoredEmail();
   const userName = getStoredName() || userEmail;
   const isAdmin = userRole === 'QUAN_TRI';
+  const isCustomer = userRole === 'KHACH_HANG';
   const isLoggedIn = Boolean(userRole && userEmail);
 
   const shortText = (value: string | null, maxLength = 14) => {
@@ -37,7 +54,29 @@ const PublicLayout = () => {
 
   useEffect(() => {
     setIsProfileMenuOpen(false);
+    setIsNotifOpen(false);
   }, [location.pathname]);
+
+  const loadNotifications = async () => {
+    if (!isCustomer) return;
+    try {
+      const [listRes, countRes] = await Promise.all([
+        api.get<ApiResponse<CustomerNotification[]>>('/api/me/notifications'),
+        api.get<ApiResponse<{ count: number }>>('/api/me/notifications/unread-count'),
+      ]);
+      setNotifications(listRes.data?.data ?? []);
+      setUnreadCount(countRes.data?.data?.count ?? 0);
+    } catch {
+      // ignore when token expired
+    }
+  };
+
+  useEffect(() => {
+    if (!isCustomer) return;
+    void loadNotifications();
+    const timer = window.setInterval(() => void loadNotifications(), 60000);
+    return () => window.clearInterval(timer);
+  }, [isCustomer, location.pathname]);
 
   useEffect(() => {
     void api
@@ -48,9 +87,11 @@ const PublicLayout = () => {
 
   useEffect(() => {
     const onDocClick = (event: MouseEvent) => {
-      if (!profileMenuRef.current) return;
-      if (!profileMenuRef.current.contains(event.target as Node)) {
+      if (profileMenuRef.current && !profileMenuRef.current.contains(event.target as Node)) {
         setIsProfileMenuOpen(false);
+      }
+      if (notifMenuRef.current && !notifMenuRef.current.contains(event.target as Node)) {
+        setIsNotifOpen(false);
       }
     };
     document.addEventListener('mousedown', onDocClick);
@@ -133,6 +174,67 @@ const PublicLayout = () => {
                       Dashboard Admin
                     </Link>
                   ) : (
+                    <div className="flex items-center gap-2">
+                      {isCustomer && (
+                        <div ref={notifMenuRef} className="relative">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setIsNotifOpen((v) => !v);
+                              void loadNotifications();
+                            }}
+                            className="relative flex h-10 w-10 items-center justify-center rounded-full bg-white/15 text-white hover:bg-white/25"
+                            aria-label="Thông báo"
+                          >
+                            <Bell className="h-5 w-5" />
+                            {unreadCount > 0 && (
+                              <span className="absolute -right-0.5 -top-0.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-white px-1 text-[10px] font-bold text-[#ef5222]">
+                                {unreadCount > 9 ? '9+' : unreadCount}
+                              </span>
+                            )}
+                          </button>
+                          {isNotifOpen && (
+                            <div className="absolute right-0 z-50 mt-2 w-80 overflow-hidden rounded-xl bg-white shadow-xl ring-1 ring-black/10">
+                              <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3">
+                                <p className="text-sm font-semibold text-gray-800">Thông báo</p>
+                                {unreadCount > 0 && (
+                                  <button
+                                    type="button"
+                                    onClick={() => void api.post('/api/me/notifications/read-all').then(() => loadNotifications())}
+                                    className="text-xs font-semibold text-[#ef5222]"
+                                  >
+                                    Đánh dấu đã đọc
+                                  </button>
+                                )}
+                              </div>
+                              <div className="max-h-80 overflow-y-auto">
+                                {notifications.length === 0 ? (
+                                  <p className="px-4 py-6 text-center text-sm text-gray-500">Chưa có thông báo.</p>
+                                ) : (
+                                  notifications.map((n) => (
+                                    <button
+                                      key={n.id}
+                                      type="button"
+                                      onClick={() => {
+                                        void api.post(`/api/me/notifications/${n.id}/read`).then(() => {
+                                          void loadNotifications();
+                                          if (n.loai === 'DAT_TRUOC' || n.loai === 'NHAC_THANH_TOAN') {
+                                            navigate('/tai-khoan/lich-su-mua-ve');
+                                          }
+                                        });
+                                      }}
+                                      className={`block w-full border-b border-gray-50 px-4 py-3 text-left hover:bg-gray-50 ${n.daDoc ? 'opacity-70' : 'bg-orange-50/40'}`}
+                                    >
+                                      <p className="text-sm font-semibold text-gray-800">{n.tieuDe}</p>
+                                      <p className="mt-1 text-xs leading-relaxed text-gray-600">{n.noiDung}</p>
+                                    </button>
+                                  ))
+                                )}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
                     <div
                       ref={profileMenuRef}
                       className="relative"
@@ -172,6 +274,7 @@ const PublicLayout = () => {
                           </button>
                         </div>
                       )}
+                    </div>
                     </div>
                   )}
                   {isAdmin && (

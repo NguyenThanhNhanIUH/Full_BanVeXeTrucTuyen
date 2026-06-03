@@ -55,6 +55,7 @@ type CreatedTicket = {
 };
 
 const BOOKING_PHONE_KEY = 'banvexe_booking_phone';
+const DEFERRED_PAY_DAYS_BEFORE = 3;
 
 const formatCurrency = (value: number) =>
   new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND', maximumFractionDigits: 0 }).format(value);
@@ -69,6 +70,13 @@ const toDateTimeMs = (trip?: TripPayload) => {
   if (!trip?.ngayDi || !trip?.gioDi) return null;
   const parsed = new Date(`${trip.ngayDi}T${trip.gioDi}`);
   return Number.isNaN(parsed.getTime()) ? null : parsed.getTime();
+};
+
+const isTripEligibleForDeferred = (trip?: TripPayload) => {
+  const ms = toDateTimeMs(trip);
+  if (ms == null) return false;
+  const minMs = Date.now() + (DEFERRED_PAY_DAYS_BEFORE + 1) * 24 * 3600 * 1000;
+  return ms > minMs;
 };
 
 const BookingPage = () => {
@@ -88,6 +96,7 @@ const BookingPage = () => {
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
   const [acceptedTerms, setAcceptedTerms] = useState(false);
+  const [paymentMode, setPaymentMode] = useState<'now' | 'deferred'>('now');
   const [dangDatVe, setDangDatVe] = useState(false);
 
   useEffect(() => {
@@ -204,6 +213,18 @@ const BookingPage = () => {
     return collectHienThiByMaGhe(getSeatLayoutByVehicleType(returnTrip.loaiXe || '', returnSeatMap.map.ghe));
   }, [returnSeatMap.map, returnTrip]);
 
+  const canUseDeferred = useMemo(() => {
+    if (!isTripEligibleForDeferred(outboundTrip)) return false;
+    if (isRoundTrip && !isTripEligibleForDeferred(returnTrip)) return false;
+    return true;
+  }, [outboundTrip, returnTrip, isRoundTrip]);
+
+  useEffect(() => {
+    if (!canUseDeferred && paymentMode === 'deferred') {
+      setPaymentMode('now');
+    }
+  }, [canUseDeferred, paymentMode]);
+
   const onSubmitPayment = () => {
     void (async () => {
       if (dangDatVe) return;
@@ -241,12 +262,14 @@ const BookingPage = () => {
         const role = getStoredRole();
         const useAuthenticatedBooking = Boolean(token && role === 'KHACH_HANG');
         const bookEndpoint = useAuthenticatedBooking ? '/api/me/booking/tickets' : '/api/public/booking/tickets';
+        const datTruoc = paymentMode === 'deferred';
 
         const outboundRes = await api.post<ApiResponse<CreatedTicket>>(bookEndpoint, {
           chuyenXeId: outboundTrip.id,
           maGhe: selectedOutboundSeats,
           ghiChu: noteBase,
           holdToken: outboundSeatMap.holdToken,
+          datTruoc,
           ...(useAuthenticatedBooking
             ? {}
             : {
@@ -263,6 +286,7 @@ const BookingPage = () => {
             maGhe: selectedReturnSeats,
             ghiChu: `${noteBase} | Khứ hồi - chiều về`,
             holdToken: returnSeatMap.holdToken,
+            datTruoc,
             ...(useAuthenticatedBooking
               ? {}
               : {
@@ -272,6 +296,24 @@ const BookingPage = () => {
                 }),
           });
           if (returnRes.data?.data) createdTickets.push(returnRes.data.data);
+        }
+
+        if (datTruoc) {
+          const codes = createdTickets.map((t) => t.maVe).filter((v) => v.length > 0);
+          if (useAuthenticatedBooking) {
+            navigate('/tai-khoan/lich-su-mua-ve', {
+              state: { deferredSuccess: true, ticketCodes: codes },
+            });
+          } else {
+            navigate('/tra-cuu-ve', {
+              state: {
+                highlightedTicketCodes: codes,
+                prefilledPhone: phone.trim(),
+                deferredSuccess: true,
+              },
+            });
+          }
+          return;
         }
 
         const tripType: 'one-way' | 'round-trip' = isRoundTrip ? 'round-trip' : 'one-way';
@@ -591,6 +633,48 @@ const BookingPage = () => {
           </section>
 
           <section className="rounded-xl border border-gray-200 bg-white p-5">
+            <h3 className="text-2xl font-bold text-gray-800">Hình thức thanh toán</h3>
+            <div className="mt-4 space-y-3">
+              <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-gray-200 p-4 hover:bg-gray-50">
+                <input
+                  type="radio"
+                  name="paymentMode"
+                  checked={paymentMode === 'now'}
+                  onChange={() => setPaymentMode('now')}
+                  className="mt-1"
+                />
+                <span>
+                  <span className="block font-semibold text-gray-800">Thanh toán ngay</span>
+                  <span className="text-sm text-gray-500">Giữ ghế 5 phút, thanh toán PayOS ngay sau khi đặt.</span>
+                </span>
+              </label>
+              <label
+                className={`flex items-start gap-3 rounded-lg border p-4 ${
+                  canUseDeferred ? 'cursor-pointer border-gray-200 hover:bg-gray-50' : 'cursor-not-allowed border-gray-100 bg-gray-50 opacity-60'
+                }`}
+              >
+                <input
+                  type="radio"
+                  name="paymentMode"
+                  checked={paymentMode === 'deferred'}
+                  onChange={() => canUseDeferred && setPaymentMode('deferred')}
+                  disabled={!canUseDeferred}
+                  className="mt-1"
+                />
+                <span>
+                  <span className="block font-semibold text-gray-800">Đặt trước — thanh toán sau</span>
+                  <span className="text-sm text-gray-500">
+                    Giữ ghế đến {DEFERRED_PAY_DAYS_BEFORE} ngày trước ngày đi. Hệ thống nhắc qua email và tài khoản.
+                  </span>
+                  {!canUseDeferred && (
+                    <span className="mt-1 block text-xs text-amber-700">Chuyến quá gần — chỉ áp dụng thanh toán ngay.</span>
+                  )}
+                </span>
+              </label>
+            </div>
+          </section>
+
+          <section className="rounded-xl border border-gray-200 bg-white p-5">
             <h3 className="text-2xl font-bold text-gray-800">Thông tin đón trả</h3>
             <div className={`mt-4 grid gap-4 ${isRoundTrip ? 'md:grid-cols-2' : 'md:grid-cols-1'}`}>
               <div className="rounded-lg border border-gray-200 p-3">
@@ -669,7 +753,7 @@ const BookingPage = () => {
               onClick={onSubmitPayment}
               className="rounded-full bg-[#ef5222] px-8 py-2 font-semibold text-white hover:bg-[#d84a1e] disabled:cursor-not-allowed disabled:opacity-50"
             >
-              {dangDatVe ? 'Đang xử lý...' : 'Thanh toán'}
+              {dangDatVe ? 'Đang xử lý...' : paymentMode === 'deferred' ? 'Đặt trước' : 'Thanh toán'}
             </button>
           </div>
         </div>

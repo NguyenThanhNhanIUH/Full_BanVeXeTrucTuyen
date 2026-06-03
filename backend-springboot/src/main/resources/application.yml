@@ -88,6 +88,8 @@ app:
     hold-check-delay-ms: ${APP_BOOKING_HOLD_CHECK_DELAY_MS:30000}
     select-hold-seconds: ${APP_BOOKING_SELECT_HOLD_SECONDS:180}
     select-hold-check-delay-ms: ${APP_BOOKING_SELECT_HOLD_CHECK_DELAY_MS:15000}
+    deferred-pay-days-before: ${APP_BOOKING_DEFERRED_PAY_DAYS_BEFORE:3}
+    deferred-reminder-check-delay-ms: ${APP_BOOKING_DEFERRED_REMINDER_CHECK_DELAY_MS:3600000}
     brand:
       name: ${APP_BOOKING_BRAND_NAME:BanVeXe}
       logo-url: ${APP_BOOKING_BRAND_LOGO_URL:https://res.cloudinary.com/demo/image/upload/v1312461204/sample.jpg}
