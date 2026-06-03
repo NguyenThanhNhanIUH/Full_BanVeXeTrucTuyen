@@ -360,6 +360,7 @@ const HomePage = () => {
   useEffect(() => {
     const state = location.state as
       | {
+          assistantSearch?: { diemDi: string; diemDen: string; ngayDi?: string };
           homeRestoreState?: HomeRestoreState;
           reopenTrip?: {
             id: number;
@@ -376,6 +377,57 @@ const HomePage = () => {
           selectedSeats?: string[];
         }
       | undefined;
+
+    const assistantSearch = state?.assistantSearch;
+    if (assistantSearch?.diemDi && assistantSearch?.diemDen) {
+      navigate(location.pathname, { replace: true, state: null });
+      setTripType('one-way');
+      setDiemDi(assistantSearch.diemDi);
+      setDiemDen(assistantSearch.diemDen);
+      if (assistantSearch.ngayDi) setNgayDi(assistantSearch.ngayDi);
+      setDaTimKiem(true);
+      setThongBaoTimKiem('');
+      setDangTimChuyen(true);
+      setTieuChiDaTim({
+        diemDi: assistantSearch.diemDi,
+        diemDen: assistantSearch.diemDen,
+        ngayDi: assistantSearch.ngayDi || ngayDi,
+        ngayVe: '',
+        soVe,
+        tripType: 'one-way',
+      });
+      void (async () => {
+        try {
+          const res = await api.get<{ data?: TripSummary[] }>('/api/catalog/trips', {
+            params: {
+              diemDi: assistantSearch.diemDi,
+              diemDen: assistantSearch.diemDen,
+              ngayDi: assistantSearch.ngayDi || undefined,
+              soLuongVeToiThieu: Number(soVe),
+            },
+          });
+          const trips = res.data?.data ?? [];
+          setDanhSachChuyen(trips);
+          setDanhSachChuyenVe([]);
+          if (!trips.length) {
+            setThongBaoTimKiem('Hiện chưa có chuyến phù hợp. Vui lòng thử ngày hoặc tuyến khác.');
+          }
+          if (trips[0]?.id) {
+            setTripDangNoiBatId(trips[0].id);
+            window.requestAnimationFrame(() => {
+              document.getElementById(`trip-card-${trips[0].id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            });
+          }
+        } catch {
+          setDanhSachChuyen([]);
+          setThongBaoTimKiem('Không thể tìm chuyến lúc này. Vui lòng thử lại sau.');
+        } finally {
+          setDangTimChuyen(false);
+        }
+      })();
+      return;
+    }
+
     const restoredHome = state?.homeRestoreState;
     if (restoredHome) {
       setTripType(restoredHome.search.tripType);

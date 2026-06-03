@@ -1,6 +1,8 @@
 package com.banvexe.accountmanagement.service.assistant;
 
+import com.banvexe.accountmanagement.dto.assistant.AssistantActionDto;
 import com.banvexe.accountmanagement.dto.assistant.AssistantChatResponse;
+import com.banvexe.accountmanagement.dto.assistant.AssistantTripCardDto;
 import com.banvexe.accountmanagement.dto.booking.TripSummaryDto;
 import com.banvexe.accountmanagement.service.booking.BookingCatalogService;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -17,6 +19,7 @@ import java.text.Normalizer;
 import java.text.NumberFormat;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
@@ -42,7 +45,16 @@ public class AssistantChatService {
         Map.entry("ha noi", "Hà Nội"),
         Map.entry("hn", "Hà Nội"),
         Map.entry("da nang", "Đà Nẵng"),
-        Map.entry("dn", "Đà Nẵng")
+        Map.entry("dn", "Đà Nẵng"),
+        Map.entry("ca mau", "Cà Mau"),
+        Map.entry("camau", "Cà Mau"),
+        Map.entry("da lat", "Đà Lạt"),
+        Map.entry("dalat", "Đà Lạt"),
+        Map.entry("can tho", "Cần Thơ"),
+        Map.entry("cantho", "Cần Thơ"),
+        Map.entry("nha trang", "Nha Trang"),
+        Map.entry("hue", "Thừa Thiên Huế"),
+        Map.entry("thua thien hue", "Thừa Thiên Huế")
     );
 
     private final BookingCatalogService bookingCatalogService;
@@ -68,10 +80,20 @@ public class AssistantChatService {
         if (apiKey.isBlank()) {
             throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "Trợ lý AI chưa được cấu hình");
         }
-        ExtractedQuery query = extractQuery(question);
+
+        String trimmed = question == null ? "" : question.trim();
+        if (trimmed.isBlank()) {
+            return welcomeResponse();
+        }
+
+        Optional<AssistantChatResponse> faq = detectFaqAnswer(trimmed);
+        if (faq.isPresent()) {
+            return faq.get();
+        }
+
+        ExtractedQuery query = extractQuery(trimmed);
         if (query.origin() == null || query.origin().isBlank() || query.destination() == null || query.destination().isBlank()) {
-            return new AssistantChatResponse(
-                "Bạn cho mình biết điểm đi và điểm đến nhé. Có thể hỏi một chiều hoặc khứ hồi, kèm tháng/năm nếu cần lọc.");
+            return generalResponse(trimmed);
         }
 
         String origin = resolveLocation(query.origin(), true);
@@ -81,8 +103,7 @@ public class AssistantChatService {
         List<TripSummaryDto> outboundFiltered = filterByMonth(outbound, query.month(), query.year());
 
         if (!query.roundTrip()) {
-            String answer = buildAnswer(origin, destination, outboundFiltered, query.month(), query.year(), false);
-            return new AssistantChatResponse(answer);
+            return buildOneWayResponse(origin, destination, outboundFiltered, query.month(), query.year());
         }
 
         Integer retMonth = query.monthReturn() != null ? query.monthReturn() : query.month();
@@ -91,7 +112,7 @@ public class AssistantChatService {
         List<TripSummaryDto> inbound = bookingCatalogService.searchTrips(destination, origin, null, 1);
         List<TripSummaryDto> inboundFiltered = filterByMonth(inbound, retMonth, retYear);
 
-        String answer = buildRoundTripAnswer(
+        return buildRoundTripResponse(
             origin,
             destination,
             outboundFiltered,
@@ -101,7 +122,302 @@ public class AssistantChatService {
             retMonth,
             retYear
         );
-        return new AssistantChatResponse(answer);
+    }
+
+    private AssistantChatResponse welcomeResponse() {
+        return new AssistantChatResponse(
+            "Bạn muốn hỏi gì? Chọn gợi ý bên dưới hoặc nhập câu hỏi nhé.",
+            List.of(
+                "TP.HCM đi Cà Mau tháng 7/2026",
+                "Cách đặt trước thanh toán sau?",
+                "Làm sao tra cứu vé?"
+            ),
+            List.of(),
+            List.of(
+                navigateAction("/", "Mở trang chủ tìm chuyến"),
+                navigateAction("/tra-cuu-ve", "Tra cứu vé"),
+                navigateAction("/tai-khoan/lich-su-mua-ve", "Lịch sử mua vé")
+            )
+        );
+    }
+
+    private AssistantChatResponse generalResponse(String question) {
+        String answer = answerGeneral(question);
+        return new AssistantChatResponse(
+            answer,
+            List.of(
+                "TP.HCM đi Cà Mau tháng 7",
+                "Đà Nẵng đi Huế khứ hồi",
+                "Cách đặt trước thanh toán sau?"
+            ),
+            List.of(),
+            List.of(
+                navigateAction("/", "Tìm chuyến trên trang chủ"),
+                navigateAction("/tra-cuu-ve", "Tra cứu vé")
+            )
+        );
+    }
+
+    private AssistantChatResponse buildOneWayResponse(
+        String origin,
+        String destination,
+        List<TripSummaryDto> trips,
+        Integer month,
+        Integer year
+    ) {
+        String whenText = whenClause(month, year);
+        if (trips.isEmpty()) {
+            return new AssistantChatResponse(
+                "Không tìm thấy chuyến " + origin + " → " + destination + " " + whenText
+                    + ". Thử đổi tháng hoặc tuyến khác nhé.",
+                List.of(
+                    "TP.HCM đi Cà Mau tháng 7/2026",
+                    origin + " đi " + destination + " tháng khác",
+                    "Cách đặt trước thanh toán sau?"
+                ),
+                List.of(),
+                List.of(searchAction(origin, destination, null), navigateAction("/", "Tìm trên trang chủ"))
+            );
+        }
+
+        String firstDate = trips.get(0).ngayDi() != null ? trips.get(0).ngayDi().toString() : null;
+        List<AssistantTripCardDto> cards = toTripCards(trips, 6);
+        return new AssistantChatResponse(
+            "Có " + trips.size() + " chuyến " + origin + " → " + destination + " " + whenText
+                + ". Bấm chuyến bên dưới để chọn ghế và đặt vé:",
+            List.of(
+                origin + " → " + destination + " khứ hồi",
+                "Cách đặt trước — thanh toán sau?",
+                "Chuyến nào còn nhiều ghế?"
+            ),
+            cards,
+            List.of(
+                searchAction(origin, destination, firstDate),
+                navigateAction("/tra-cuu-ve", "Tra cứu vé")
+            )
+        );
+    }
+
+    private AssistantChatResponse buildRoundTripResponse(
+        String origin,
+        String destination,
+        List<TripSummaryDto> outbound,
+        List<TripSummaryDto> inbound,
+        Integer monthOut,
+        Integer yearOut,
+        Integer monthRet,
+        Integer yearRet
+    ) {
+        String whenOut = whenClause(monthOut, yearOut);
+        String whenRet = whenClause(monthRet, yearRet);
+        StringBuilder sb = new StringBuilder();
+        sb.append("Khứ hồi ").append(origin).append(" ⇄ ").append(destination).append(":\n");
+        sb.append("• Chiều đi: ").append(outbound.isEmpty() ? "chưa có chuyến " + whenOut : outbound.size() + " chuyến");
+        sb.append("\n• Chiều về: ").append(inbound.isEmpty() ? "chưa có chuyến " + whenRet : inbound.size() + " chuyến");
+        if (!outbound.isEmpty()) {
+            sb.append("\n\nChọn chuyến đi bên dưới, sau đó hỏi mình chiều về hoặc mở trang chủ chọn Khứ hồi.");
+        }
+
+        List<AssistantTripCardDto> cards = toTripCards(outbound, 5);
+        cards = new ArrayList<>(cards);
+        cards.addAll(toTripCards(inbound, 3).stream()
+            .map(c -> new AssistantTripCardDto(
+                c.id(),
+                c.tenTuyen() + " (chiều về)",
+                c.diemDi(),
+                c.diemDen(),
+                c.ngayDi(),
+                c.gioDi(),
+                c.gioDenDuKien(),
+                c.thoiGianDuKienPhut(),
+                c.giaVe(),
+                c.loaiXe(),
+                c.bienSo(),
+                c.soGheTrong(),
+                c.subtitle()
+            ))
+            .toList());
+
+        String firstDate = outbound.isEmpty()
+            ? (inbound.isEmpty() ? null : inbound.get(0).ngayDi().toString())
+            : outbound.get(0).ngayDi().toString();
+
+        return new AssistantChatResponse(
+            sb.toString(),
+            List.of(
+                "Chỉ tìm chiều đi " + origin + " → " + destination,
+                "Chỉ tìm chiều về " + destination + " → " + origin,
+                "Cách đặt khứ hồi trên web?"
+            ),
+            cards,
+            List.of(
+                searchAction(origin, destination, firstDate),
+                navigateAction("/", "Đặt khứ hồi trên trang chủ")
+            )
+        );
+    }
+
+    private List<AssistantTripCardDto> toTripCards(List<TripSummaryDto> trips, int limit) {
+        return trips.stream().limit(limit).map(this::toTripCard).toList();
+    }
+
+    private AssistantTripCardDto toTripCard(TripSummaryDto t) {
+        StringBuilder subtitle = new StringBuilder();
+        subtitle.append(formatDate(t.ngayDi())).append(" · ").append(formatTime(t.gioDi()));
+        subtitle.append(" · ").append(formatCurrency(t.giaVe()));
+        if (t.loaiXe() != null && !t.loaiXe().isBlank()) {
+            subtitle.append(" · ").append(t.loaiXe().trim());
+        }
+        if (t.soGheTrong() > 0) {
+            subtitle.append(" · Còn ").append(t.soGheTrong()).append(" ghế");
+        }
+        return new AssistantTripCardDto(
+            t.id(),
+            t.tenTuyen(),
+            t.diemDi(),
+            t.diemDen(),
+            t.ngayDi() != null ? t.ngayDi().toString() : null,
+            t.gioDi() != null ? t.gioDi().toString() : null,
+            t.gioDenDuKien() != null ? t.gioDenDuKien().toString() : null,
+            t.thoiGianDuKienPhut(),
+            t.giaVe(),
+            t.loaiXe(),
+            t.bienSo(),
+            t.soGheTrong(),
+            subtitle.toString()
+        );
+    }
+
+    private AssistantActionDto searchAction(String diemDi, String diemDen, String ngayDi) {
+        return new AssistantActionDto("SEARCH", "Xem tất cả chuyến trên trang chủ", "/", diemDi, diemDen, ngayDi);
+    }
+
+    private AssistantActionDto navigateAction(String path, String label) {
+        return new AssistantActionDto("NAVIGATE", label, path, null, null, null);
+    }
+
+    private AssistantChatResponse faqWrap(String answer, List<String> suggestions, List<AssistantActionDto> actions) {
+        return new AssistantChatResponse(answer, suggestions, List.of(), actions);
+    }
+
+    private Optional<AssistantChatResponse> detectFaqAnswer(String question) {
+        String n = normalizeLocationForMatch(question);
+
+        if (containsAny(n, "dat truoc", "thanh toan sau", "tra sau", "giu cho lau", "book truoc")) {
+            return Optional.of(faqWrap(
+                """
+                Đặt trước — thanh toán sau trên VinaGo:
+                1. Chọn chuyến xa (ít nhất 4 ngày trước ngày đi).
+                2. Ở trang đặt vé, chọn "Đặt trước — thanh toán sau".
+                3. Ghế giữ đến hạn thanh toán (3 ngày trước ngày đi).
+                4. Nhắc qua email + thông báo tài khoản (7/3/1 ngày).
+                5. Lịch sử vé / Tra cứu vé → "Thanh toán ngay".""",
+                List.of("TP.HCM đi Cà Mau tháng 7", "Tìm chuyến xa để đặt trước"),
+                List.of(navigateAction("/", "Tìm chuyến"), navigateAction("/tai-khoan/lich-su-mua-ve", "Lịch sử vé"))
+            ));
+        }
+
+        if (containsAny(n, "tra cuu", "ma ve", "tim ve", "kiem tra ve")) {
+            return Optional.of(faqWrap(
+                """
+                Tra cứu vé: nhập SĐT + mã vé tại menu Tra cứu vé.
+                Xem QR, trạng thái, bản đồ theo dõi xe (nếu đã thanh toán).
+                Đăng nhập → Lịch sử mua vé để xem tất cả vé.""",
+                List.of("Cách hủy vé?", "Thanh toán vé đặt trước"),
+                List.of(navigateAction("/tra-cuu-ve", "Mở tra cứu vé"))
+            ));
+        }
+
+        if (containsAny(n, "huy ve", "yeu cau huy", "cancel ticket", "cancel")) {
+            return Optional.of(faqWrap(
+                """
+                Hủy vé:
+                • Chưa thanh toán / đặt trước: hủy trực tiếp trên Tra cứu hoặc Lịch sử vé.
+                • Đã thanh toán: gửi yêu cầu hủy, nhân viên duyệt.""",
+                List.of("Tra cứu vé của tôi", "Cách đặt trước?"),
+                List.of(navigateAction("/tra-cuu-ve", "Tra cứu vé"))
+            ));
+        }
+
+        if (containsAny(n, "payos", "thanh toan", "tra tien", "quet qr")) {
+            return Optional.of(faqWrap(
+                """
+                Thanh toán PayOS: chọn ghế → Thanh toán ngay → quét QR / chuyển khoản.
+                Vé đặt trước: thanh toán trong Lịch sử vé trước hạn.""",
+                List.of("Cách đặt trước?", "TP.HCM đi Cà Mau"),
+                List.of(navigateAction("/tai-khoan/lich-su-mua-ve", "Lịch sử vé"))
+            ));
+        }
+
+        if (containsAny(n, "theo doi", "ban do", "vi tri xe", "xe dang o dau", "gps")) {
+            return Optional.of(faqWrap(
+                """
+                Theo dõi xe: tab "Theo dõi xe" trên thẻ chuyến hoặc trong chi tiết vé sau thanh toán.
+                Hiển thị tuyến, tiến độ %, biển số — mô phỏng theo lịch trình.""",
+                List.of("TP.HCM đi Cà Mau tháng 7", "Tìm chuyến"),
+                List.of(navigateAction("/", "Xem chuyến trên trang chủ"))
+            ));
+        }
+
+        if (containsAny(n, "khu hoi", "ve khu hoi", "di ve", "hai chieu", "tro ve")) {
+            return Optional.of(faqWrap(
+                """
+                Khứ hồi: Trang chủ → Khứ hồi → chọn chuyến đi & về → ghế từng chiều → thanh toán một lần.
+                Hoặc hỏi mình: "TP.HCM đi Đà Lạt khứ hồi tháng 6".""",
+                List.of("TP.HCM đi Cà Mau khứ hồi", "Đà Nẵng đi Huế khứ hồi"),
+                List.of(navigateAction("/", "Đặt khứ hồi trên trang chủ"))
+            ));
+        }
+
+        if (containsAny(n, "xin chao", "hello", "hi ", " chao ", "tro giup", "lam gi", "giup gi")) {
+            return Optional.of(welcomeResponse());
+        }
+
+        return Optional.empty();
+    }
+
+    private boolean containsAny(String normalized, String... keywords) {
+        for (String kw : keywords) {
+            if (normalized.contains(kw)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private String answerGeneral(String question) {
+        String prompt = buildGeneralPrompt(question);
+        String responseText = callGemini(prompt, 768);
+        String cleaned = responseText == null ? "" : responseText.trim();
+        if (cleaned.isBlank()) {
+            return """
+                Mình chưa hiểu rõ câu hỏi. Bạn thử:
+                • Tìm chuyến: "Sài Gòn đi Cà Mau tháng 7"
+                • Hỏi: "Cách đặt trước thanh toán sau?"
+                • Hỏi: "Làm sao tra cứu vé?"
+                """;
+        }
+        return cleaned;
+    }
+
+    private String buildGeneralPrompt(String question) {
+        return """
+            Ban la tro ly dat ve xe khach VinaGo (website ban ve xe). Tra loi bang tieng Viet, than thien, ro rang.
+            Toi da 2-6 doan ngan, co the dung gach dau dong.
+
+            He thong ho tro:
+            - Tim chuyen mot chieu / khu hoi theo diem di, diem den, thang/nam
+            - Dat truoc thanh toan sau (giu ghe den 3 ngay truoc ngay di, nhan email/thong bao)
+            - Thanh toan ngay qua PayOS (giu ghe 5 phut)
+            - Tra cuu ve bang SDT + ma ve; lich su mua ve khi dang nhap
+            - Huy ve chua thanh toan truc tiep; ve da thanh toan gui yeu cau huy
+            - Theo doi xe tren ban do (mo phong theo lich trinh)
+
+            Neu cau hoi la tim chuyen ma thieu diem di/den, nhac khach noi ro hai thanh pho.
+            Neu khong chac, goi y cau mau thay vi bia thong tin.
+
+            Cau hoi: "%s"
+            """.formatted(question.replace("\"", "'").replace("\n", " "));
     }
 
     private List<TripSummaryDto> filterByMonth(List<TripSummaryDto> trips, Integer month, Integer year) {
@@ -178,6 +494,7 @@ public class AssistantChatService {
         sb.append("Có ").append(trips.size()).append(" chuyến ").append(origin).append(" → ")
             .append(destination).append(" ").append(whenText).append(":");
         appendTripLines(sb, trips, 5);
+        sb.append("\n\n→ Vào Trang chủ, chọn tuyến và ngày tương ứng để đặt vé hoặc đặt trước.");
         return sb.toString();
     }
 
@@ -267,7 +584,7 @@ public class AssistantChatService {
 
     private ExtractedQuery extractQuery(String question) {
         String prompt = buildPrompt(question);
-        String responseText = callGemini(prompt);
+        String responseText = callGemini(prompt, 384);
         String jsonText = extractJson(responseText);
         try {
             JsonNode node = objectMapper.readTree(jsonText);
@@ -304,7 +621,7 @@ public class AssistantChatService {
             """.formatted(question.replace("\"", "'").replace("\n", " "));
     }
 
-    private String callGemini(String prompt) {
+    private String callGemini(String prompt, int maxOutputTokens) {
         String url = "https://generativelanguage.googleapis.com/v1beta/models/" + model + ":generateContent?key=" + apiKey;
         ObjectNode root = objectMapper.createObjectNode();
         ArrayNode contents = root.putArray("contents");
@@ -314,7 +631,7 @@ public class AssistantChatService {
         parts.addObject().put("text", prompt);
         ObjectNode config = root.putObject("generationConfig");
         config.put("temperature", 0.2);
-        config.put("maxOutputTokens", 384);
+        config.put("maxOutputTokens", Math.max(256, maxOutputTokens));
 
         try {
             String body = objectMapper.writeValueAsString(root);
