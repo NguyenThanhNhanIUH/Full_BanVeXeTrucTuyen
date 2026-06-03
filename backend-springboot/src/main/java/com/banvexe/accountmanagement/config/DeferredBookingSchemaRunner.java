@@ -65,11 +65,13 @@ public class DeferredBookingSchemaRunner implements ApplicationRunner, Ordered {
     }
 
     private String resolveTicketTableName() {
-        for (String candidate : List.of("VeXe", "vexe", "VEXE")) {
+        for (String candidate : List.of("vexe", "VeXe", "VEXE")) {
             Integer count = jdbcTemplate.queryForObject(
                 """
                 SELECT COUNT(*) FROM information_schema.TABLES
-                WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?
+                WHERE TABLE_SCHEMA = DATABASE()
+                  AND TABLE_NAME = ?
+                  AND TABLE_TYPE = 'BASE TABLE'
                 """,
                 Integer.class,
                 candidate
