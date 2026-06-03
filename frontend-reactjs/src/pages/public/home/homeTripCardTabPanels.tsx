@@ -51,6 +51,14 @@ export const TripSchedulePanel = ({ trip, gioDenHienThi }: { trip: TripSummary; 
         <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Điểm đến</p>
         <p className="mt-0.5">{trip.diemDen}</p>
       </div>
+      <div>
+        <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Loại xe</p>
+        <p className="mt-0.5 font-semibold">{trip.loaiXe || '—'}</p>
+      </div>
+      <div>
+        <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Biển số xe</p>
+        <p className="mt-0.5 font-semibold font-mono">{trip.bienSo || '—'}</p>
+      </div>
       <div className="sm:col-span-2">
         <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Thời gian & quãng đường</p>
         <p className="mt-0.5">

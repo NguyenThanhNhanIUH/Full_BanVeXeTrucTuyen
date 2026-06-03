@@ -478,6 +478,7 @@ const HomePage = () => {
     thoiGianDuKienPhut: trip.thoiGianDuKienPhut,
     giaVe: Number(trip.giaVe || 0),
     loaiXe: trip.loaiXe,
+    bienSo: trip.bienSo,
   });
 
   const buildHomeRestoreState = (focusTripId?: number | null): HomeRestoreState => ({

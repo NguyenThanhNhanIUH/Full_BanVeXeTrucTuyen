@@ -10,6 +10,7 @@ export type TripSummary = {
   khoangCach?: number;
   giaVe: number;
   loaiXe: string;
+  bienSo?: string;
   soGheTrong: number;
 };
 

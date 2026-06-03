@@ -115,7 +115,14 @@ const HomeTripCard = ({
 
         <div className="min-w-[145px] text-right pt-0.5">
           <p className="text-xs text-gray-500">
-            {trip.loaiXe ? <span>{trip.loaiXe} • </span> : null}
+            {trip.loaiXe ? <span>{trip.loaiXe}</span> : null}
+            {trip.bienSo ? (
+              <span>
+                {trip.loaiXe ? ' • ' : ''}
+                <span className="font-mono">{trip.bienSo}</span>
+              </span>
+            ) : null}
+            {(trip.loaiXe || trip.bienSo) ? ' • ' : null}
             <span className="font-semibold text-green-600">{trip.soGheTrong} chỗ trống</span>
           </p>
           <p className="text-2xl font-bold text-[#ef5222] mt-1">{formatCurrency(Number(trip.giaVe || 0))}</p>
