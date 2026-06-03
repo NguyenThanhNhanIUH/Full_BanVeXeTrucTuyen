@@ -25,6 +25,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Locale;
 import java.util.Optional;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -99,11 +101,13 @@ public class AssistantChatService {
         String origin = resolveLocation(query.origin(), true);
         String destination = resolveLocation(query.destination(), false);
 
-        List<TripSummaryDto> outbound = bookingCatalogService.searchTrips(origin, destination, null, 1);
-        List<TripSummaryDto> outboundFiltered = filterByMonth(outbound, query.month(), query.year());
+        List<TripSummaryDto> outbound = bookingCatalogService.searchTrips(origin, destination, query.exactDate(), 1);
+        List<TripSummaryDto> outboundFiltered = query.exactDate() != null
+            ? sortTrips(outbound)
+            : filterByMonth(outbound, query.month(), query.year());
 
         if (!query.roundTrip()) {
-            return buildOneWayResponse(origin, destination, outboundFiltered, query.month(), query.year());
+            return buildOneWayResponse(origin, destination, outboundFiltered, query);
         }
 
         Integer retMonth = query.monthReturn() != null ? query.monthReturn() : query.month();
@@ -117,8 +121,7 @@ public class AssistantChatService {
             destination,
             outboundFiltered,
             inboundFiltered,
-            query.month(),
-            query.year(),
+            query,
             retMonth,
             retYear
         );
@@ -162,25 +165,29 @@ public class AssistantChatService {
         String origin,
         String destination,
         List<TripSummaryDto> trips,
-        Integer month,
-        Integer year
+        ExtractedQuery query
     ) {
-        String whenText = whenClause(month, year);
+        String whenText = whenClause(query);
         if (trips.isEmpty()) {
+            String hint = query.exactDate() != null && query.exactDate().equals(LocalDate.now())
+                ? " Thử hỏi ngày mai hoặc xem thêm trên trang chủ nhé."
+                : " Thử đổi ngày hoặc tuyến khác nhé.";
             return new AssistantChatResponse(
-                "Không tìm thấy chuyến " + origin + " → " + destination + " " + whenText
-                    + ". Thử đổi tháng hoặc tuyến khác nhé.",
+                "Không tìm thấy chuyến " + origin + " → " + destination + " " + whenText + "." + hint,
                 List.of(
-                    "TP.HCM đi Cà Mau tháng 7/2026",
-                    origin + " đi " + destination + " tháng khác",
+                    origin + " đi " + destination + " ngày mai",
+                    origin + " đi " + destination + " tháng " + LocalDate.now().getMonthValue(),
                     "Cách đặt trước thanh toán sau?"
                 ),
                 List.of(),
-                List.of(searchAction(origin, destination, null), navigateAction("/", "Tìm trên trang chủ"))
+                List.of(
+                    searchAction(origin, destination, formatIsoDate(query.exactDate())),
+                    navigateAction("/", "Tìm trên trang chủ")
+                )
             );
         }
 
-        String firstDate = trips.get(0).ngayDi() != null ? trips.get(0).ngayDi().toString() : null;
+        String firstDate = trips.get(0).ngayDi() != null ? trips.get(0).ngayDi().toString() : formatIsoDate(query.exactDate());
         List<AssistantTripCardDto> cards = toTripCards(trips, 6);
         return new AssistantChatResponse(
             "Có " + trips.size() + " chuyến " + origin + " → " + destination + " " + whenText
@@ -203,12 +210,11 @@ public class AssistantChatService {
         String destination,
         List<TripSummaryDto> outbound,
         List<TripSummaryDto> inbound,
-        Integer monthOut,
-        Integer yearOut,
+        ExtractedQuery query,
         Integer monthRet,
         Integer yearRet
     ) {
-        String whenOut = whenClause(monthOut, yearOut);
+        String whenOut = whenClause(query);
         String whenRet = whenClause(monthRet, yearRet);
         StringBuilder sb = new StringBuilder();
         sb.append("Khứ hồi ").append(origin).append(" ⇄ ").append(destination).append(":\n");
@@ -451,6 +457,119 @@ public class AssistantChatService {
         return "trong thời gian sắp tới";
     }
 
+    private String whenClause(ExtractedQuery query) {
+        if (query.exactDate() != null) {
+            return describeDate(query.exactDate());
+        }
+        return whenClause(query.month(), query.year());
+    }
+
+    private String describeDate(LocalDate date) {
+        LocalDate today = LocalDate.now();
+        if (date.equals(today)) {
+            return "hôm nay (" + DATE_FORMATTER.format(date) + ")";
+        }
+        if (date.equals(today.plusDays(1))) {
+            return "ngày mai (" + DATE_FORMATTER.format(date) + ")";
+        }
+        return "ngày " + DATE_FORMATTER.format(date);
+    }
+
+    private String formatIsoDate(LocalDate date) {
+        return date != null ? date.toString() : null;
+    }
+
+    private Optional<LocalDate> parseExactDateFromQuestion(String question) {
+        String n = normalizeLocationForMatch(question);
+        LocalDate today = LocalDate.now();
+
+        if (containsAny(n, "hom nay", "bua nay", "bua ni", "ngay nay", "h nay")) {
+            return Optional.of(today);
+        }
+        if (containsAny(n, "ngay mai", " mai co", " mai k", " mai co chuyen")) {
+            return Optional.of(today.plusDays(1));
+        }
+        if (containsAny(n, "ngay kia", "ngay mot")) {
+            return Optional.of(today.plusDays(2));
+        }
+
+        Matcher matcher = Pattern.compile("(\\d{1,2})[/.\\-](\\d{1,2})(?:[/.\\-](\\d{2,4}))?").matcher(question);
+        if (matcher.find()) {
+            try {
+                int day = Integer.parseInt(matcher.group(1));
+                int month = Integer.parseInt(matcher.group(2));
+                String yearRaw = matcher.group(3);
+                int year = today.getYear();
+                if (yearRaw != null) {
+                    year = Integer.parseInt(yearRaw);
+                    if (year < 100) {
+                        year += 2000;
+                    }
+                }
+                return Optional.of(LocalDate.of(year, month, day));
+            } catch (Exception ignored) {
+                // Fall through if the date literal is invalid.
+            }
+        }
+        return Optional.empty();
+    }
+
+    private boolean containsExplicitYear(String question) {
+        return Pattern.compile("20\\d{2}").matcher(question).find();
+    }
+
+    private ExtractedQuery applyDateOverrides(String question, ExtractedQuery parsed) {
+        Optional<LocalDate> exactDate = parseExactDateFromQuestion(question);
+        if (exactDate.isPresent()) {
+            LocalDate date = exactDate.get();
+            return new ExtractedQuery(
+                parsed.origin(),
+                parsed.destination(),
+                date.getMonthValue(),
+                date.getYear(),
+                parsed.roundTrip(),
+                parsed.monthReturn(),
+                parsed.yearReturn(),
+                date
+            );
+        }
+
+        String n = normalizeLocationForMatch(question);
+        LocalDate today = LocalDate.now();
+        Integer month = parsed.month();
+        Integer year = parsed.year();
+
+        if (containsAny(n, "thang nay")) {
+            month = today.getMonthValue();
+            year = today.getYear();
+        } else if (containsAny(n, "thang sau")) {
+            LocalDate nextMonth = today.plusMonths(1);
+            month = nextMonth.getMonthValue();
+            year = nextMonth.getYear();
+        } else if (containsAny(n, "tuan nay")) {
+            month = today.getMonthValue();
+            year = today.getYear();
+        }
+
+        if (year != null && year < today.getYear() && !containsExplicitYear(question)) {
+            year = today.getYear();
+        }
+        if (month != null && year == null) {
+            year = today.getYear();
+        }
+
+        return new ExtractedQuery(
+            parsed.origin(),
+            parsed.destination(),
+            month,
+            year,
+            parsed.roundTrip(),
+            parsed.monthReturn(),
+            parsed.yearReturn(),
+            null
+        );
+    }
+
     private void appendTripLines(StringBuilder sb, List<TripSummaryDto> trips, int maxLines) {
         int count = Math.min(maxLines, trips.size());
         for (int i = 0; i < count; i++) {
@@ -595,22 +714,29 @@ public class AssistantChatService {
             boolean roundTrip = asBoolean(node, "roundTrip");
             Integer monthReturn = asInt(node, "monthReturn");
             Integer yearReturn = asInt(node, "yearReturn");
-            return new ExtractedQuery(origin, destination, month, year, roundTrip, monthReturn, yearReturn);
+            ExtractedQuery parsed = new ExtractedQuery(origin, destination, month, year, roundTrip, monthReturn, yearReturn, null);
+            return applyDateOverrides(question, parsed);
         } catch (Exception e) {
-            return new ExtractedQuery(null, null, null, null, false, null, null);
+            return applyDateOverrides(question, new ExtractedQuery(null, null, null, null, false, null, null, null));
         }
     }
 
     private String buildPrompt(String question) {
+        LocalDate today = LocalDate.now();
         return """
             Ban la bo trich xuat thong tin dat ve xe khach tu cau hoi tieng Viet.
             Tra ve DUY NHAT mot object JSON (khong markdown, khong giai thich), dung schema:
             {"origin":string|null,"destination":string|null,"month":number|null,"year":number|null,\
             "roundTrip":boolean,"monthReturn":number|null,"yearReturn":number|null}
 
+            Hom nay la %s (thang %d nam %d). LUON uu tien nam hien tai (%d) neu khach khong noi nam cu the.
+
             Quy tac:
             - origin = noi xuat phat / diem don; destination = noi den / diem tra.
-            - month/year: thoi gian chuyen DI (uu tien). Neu khach noi "thang sau", "thang 6 toi" hay suy ra theo ngay hom nay.
+            - "hom nay", "bua nay", "ngay nay" -> month=%d, year=%d.
+            - "ngay mai" -> thang/nam tuong ung ngay mai.
+            - "thang nay" -> month=%d, year=%d.
+            - month/year: thoi gian chuyen DI. KHONG dung nam 2024 hay nam cu neu khach hoi ve hom nay/thang nay.
             - roundTrip = true neu khach hoi khu hoi, ve khu hoi, hai chieu, di va ve, co chieu ve, book ca di lan ve, \
             "tu A den B roi ve lai A", tro ve, ngay ve (kem chuyen di).
             - monthReturn/yearReturn: thang/nam rieng cho chuyen VE neu khach noi ro (vd "di thang 6 ve thang 7"); \
@@ -618,7 +744,17 @@ public class AssistantChatService {
             - Neu cau khong lien quan tim chuyen, van tra JSON voi origin/destination null.
 
             Cau hoi: "%s"
-            """.formatted(question.replace("\"", "'").replace("\n", " "));
+            """.formatted(
+            DATE_FORMATTER.format(today),
+            today.getMonthValue(),
+            today.getYear(),
+            today.getYear(),
+            today.getMonthValue(),
+            today.getYear(),
+            today.getMonthValue(),
+            today.getYear(),
+            question.replace("\"", "'").replace("\n", " ")
+        );
     }
 
     private String callGemini(String prompt, int maxOutputTokens) {
@@ -758,7 +894,8 @@ public class AssistantChatService {
         Integer year,
         boolean roundTrip,
         Integer monthReturn,
-        Integer yearReturn
+        Integer yearReturn,
+        LocalDate exactDate
     ) {
     }
 }

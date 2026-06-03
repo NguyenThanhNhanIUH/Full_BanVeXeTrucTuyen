@@ -52,7 +52,7 @@ type ChatMessage = {
 };
 
 const QUICK_PROMPTS = [
-  'TP.HCM đi Cà Mau tháng 7/2026',
+  'Bữa nay TP.HCM đi Cà Mau có chuyến không?',
   'Cách đặt trước thanh toán sau?',
   'Làm sao tra cứu và hủy vé?',
   'Theo dõi xe trên bản đồ thế nào?',
