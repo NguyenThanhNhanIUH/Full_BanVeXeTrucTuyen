@@ -705,6 +705,7 @@ public class AssistantChatService {
         String prompt = buildPrompt(question);
         String responseText = callGemini(prompt, 384);
         String jsonText = extractJson(responseText);
+        ExtractedQuery parsed;
         try {
             JsonNode node = objectMapper.readTree(jsonText);
             String origin = asText(node, "origin");
@@ -714,11 +715,92 @@ public class AssistantChatService {
             boolean roundTrip = asBoolean(node, "roundTrip");
             Integer monthReturn = asInt(node, "monthReturn");
             Integer yearReturn = asInt(node, "yearReturn");
-            ExtractedQuery parsed = new ExtractedQuery(origin, destination, month, year, roundTrip, monthReturn, yearReturn, null);
-            return applyDateOverrides(question, parsed);
+            parsed = new ExtractedQuery(origin, destination, month, year, roundTrip, monthReturn, yearReturn, null);
         } catch (Exception e) {
-            return applyDateOverrides(question, new ExtractedQuery(null, null, null, null, false, null, null, null));
+            parsed = new ExtractedQuery(null, null, null, null, false, null, null, null);
         }
+
+        parsed = mergeWithRuleBasedRoute(question, parsed);
+        return applyDateOverrides(question, parsed);
+    }
+
+    private ExtractedQuery mergeWithRuleBasedRoute(String question, ExtractedQuery parsed) {
+        Optional<String[]> ruleRoute = extractRouteFromQuestion(question);
+        if (ruleRoute.isEmpty()) {
+            return parsed;
+        }
+        String origin = parsed.origin();
+        String destination = parsed.destination();
+        if (origin == null || origin.isBlank()) {
+            origin = ruleRoute.get()[0];
+        }
+        if (destination == null || destination.isBlank()) {
+            destination = ruleRoute.get()[1];
+        }
+        return new ExtractedQuery(
+            origin,
+            destination,
+            parsed.month(),
+            parsed.year(),
+            parsed.roundTrip(),
+            parsed.monthReturn(),
+            parsed.yearReturn(),
+            parsed.exactDate()
+        );
+    }
+
+    private Optional<String[]> extractRouteFromQuestion(String question) {
+        String n = normalizeLocationForMatch(question);
+
+        Matcher routeMatcher = Pattern.compile(
+            "(?:tu|from)\\s+(.+?)\\s+(?:ve|den|di|to)\\s+(.+?)(?:\\?|$|\\sco\\s|\\sth\\s|\\sthang\\s|\\shom\\s|\\sbua\\s|\\sngay\\s|\\skhong|\\sk\\s*$)"
+        ).matcher(n);
+        if (routeMatcher.find()) {
+            return Optional.of(new String[] {
+                canonicalizeLocation(cleanLocationToken(routeMatcher.group(1))),
+                canonicalizeLocation(cleanLocationToken(routeMatcher.group(2))),
+            });
+        }
+
+        Matcher simpleMatcher = Pattern.compile(
+            "^(.+?)\\s+(?:ve|den|di)\\s+(.+?)(?:\\?|$|\\sco\\s|\\sth\\s|\\sthang\\s|\\shom\\s|\\sbua\\s|\\sngay\\s|\\skhong|\\sk\\s*$)"
+        ).matcher(n);
+        if (simpleMatcher.find()) {
+            return Optional.of(new String[] {
+                canonicalizeLocation(cleanLocationToken(simpleMatcher.group(1))),
+                canonicalizeLocation(cleanLocationToken(simpleMatcher.group(2))),
+            });
+        }
+
+        List<String> ordered = new ArrayList<>();
+        record AliasHit(int index, String canonical) {}
+        List<AliasHit> hits = new ArrayList<>();
+        for (Map.Entry<String, String> entry : LOCATION_ALIASES.entrySet()) {
+            int idx = n.indexOf(entry.getKey());
+            if (idx >= 0) {
+                hits.add(new AliasHit(idx, entry.getValue()));
+            }
+        }
+        hits.sort(Comparator.comparingInt(AliasHit::index));
+        for (AliasHit hit : hits) {
+            if (!ordered.contains(hit.canonical())) {
+                ordered.add(hit.canonical());
+            }
+        }
+        if (ordered.size() >= 2) {
+            return Optional.of(new String[] { ordered.get(0), ordered.get(1) });
+        }
+        return Optional.empty();
+    }
+
+    private String cleanLocationToken(String raw) {
+        if (raw == null) {
+            return "";
+        }
+        return raw
+            .replaceAll("\\s+(k|khong|ko|hn|hcm|co chuyen nao|co chuyen|co xe|co bus)$", "")
+            .replaceAll("^(bua nay|hom nay|ngay nay|ngay mai|co chuyen nao|co chuyen|co xe|tim|tim kiem)\\s+", "")
+            .trim();
     }
 
     private String buildPrompt(String question) {
