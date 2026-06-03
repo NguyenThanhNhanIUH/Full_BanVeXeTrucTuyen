@@ -2,10 +2,13 @@ package com.banvexe.accountmanagement.service.booking;
 
 import com.banvexe.accountmanagement.dto.booking.DailyRevenuePointDto;
 import com.banvexe.accountmanagement.dto.booking.MonthlyRevenuePointDto;
+import com.banvexe.accountmanagement.dto.booking.RevenueByRouteReportDto;
 import com.banvexe.accountmanagement.dto.booking.RevenueDailyReportDto;
+import com.banvexe.accountmanagement.dto.booking.RouteRevenuePointDto;
 import com.banvexe.accountmanagement.entity.TicketStatus;
 import com.banvexe.accountmanagement.repository.VeXeRepository;
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.YearMonth;
@@ -25,6 +28,8 @@ public class RevenueReportService {
 
     private static final ZoneId VN = ZoneId.of("Asia/Ho_Chi_Minh");
 
+    private static final List<TicketStatus> PAID_STATUSES = List.of(TicketStatus.DA_THANH_TOAN, TicketStatus.HOAN_THANH);
+
     private final VeXeRepository veXeRepository;
 
     public RevenueReportService(VeXeRepository veXeRepository) {
@@ -32,8 +37,26 @@ public class RevenueReportService {
     }
 
     private List<Object[]> loadPaidTicketMoneyRows() {
-        return veXeRepository.findNgayDatAndTongTienByTrangThaiIn(
-            List.of(TicketStatus.DA_THANH_TOAN, TicketStatus.HOAN_THANH));
+        return veXeRepository.findNgayDatAndTongTienByTrangThaiIn(PAID_STATUSES);
+    }
+
+    private Instant monthStartInclusive(YearMonth yearMonth) {
+        return yearMonth.atDay(1).atStartOfDay(VN).toInstant();
+    }
+
+    private Instant monthEndExclusive(YearMonth yearMonth) {
+        return yearMonth.plusMonths(1).atDay(1).atStartOfDay(VN).toInstant();
+    }
+
+    private String buildRouteShortLabel(String tenTuyen, String diemDi, String diemDen) {
+        if (tenTuyen != null && !tenTuyen.isBlank()) {
+            String trimmed = tenTuyen.trim();
+            return trimmed.length() > 28 ? trimmed.substring(0, 25) + "…" : trimmed;
+        }
+        String from = diemDi != null ? diemDi.trim() : "?";
+        String to = diemDen != null ? diemDen.trim() : "?";
+        String label = from + " → " + to;
+        return label.length() > 32 ? label.substring(0, 29) + "…" : label;
     }
 
     @Transactional(readOnly = true)
@@ -122,6 +145,74 @@ public class RevenueReportService {
             Collections.unmodifiableList(days),
             monthTickets,
             monthRevenue
+        );
+    }
+
+    @Transactional(readOnly = true)
+    public RevenueByRouteReportDto buildRouteReport(YearMonth yearMonth) {
+        List<Object[]> rows = veXeRepository.sumRevenueByRouteBetween(
+            PAID_STATUSES,
+            monthStartInclusive(yearMonth),
+            monthEndExclusive(yearMonth)
+        );
+
+        List<RouteRevenuePointDto> routes = new ArrayList<>();
+        BigDecimal totalRevenue = BigDecimal.ZERO;
+        long totalTickets = 0;
+
+        for (Object[] row : rows) {
+            if (row == null || row.length < 6) {
+                continue;
+            }
+            Integer routeId = row[0] instanceof Number n ? n.intValue() : null;
+            String tenTuyen = row[1] != null ? row[1].toString() : "";
+            String diemDi = row[2] != null ? row[2].toString() : "";
+            String diemDen = row[3] != null ? row[3].toString() : "";
+            long ticketCount = row[4] instanceof Number n ? n.longValue() : 0L;
+            BigDecimal revenue = row[5] instanceof BigDecimal bd ? bd : BigDecimal.ZERO;
+
+            totalTickets += ticketCount;
+            totalRevenue = totalRevenue.add(revenue);
+            routes.add(new RouteRevenuePointDto(
+                routeId,
+                tenTuyen,
+                diemDi,
+                diemDen,
+                buildRouteShortLabel(tenTuyen, diemDi, diemDen),
+                ticketCount,
+                revenue,
+                0.0
+            ));
+        }
+
+        if (totalRevenue.compareTo(BigDecimal.ZERO) > 0) {
+            List<RouteRevenuePointDto> withShare = new ArrayList<>(routes.size());
+            for (RouteRevenuePointDto route : routes) {
+                double share = route.revenue()
+                    .multiply(BigDecimal.valueOf(100))
+                    .divide(totalRevenue, 2, RoundingMode.HALF_UP)
+                    .doubleValue();
+                withShare.add(new RouteRevenuePointDto(
+                    route.routeId(),
+                    route.tenTuyen(),
+                    route.diemDi(),
+                    route.diemDen(),
+                    route.shortLabel(),
+                    route.ticketCount(),
+                    route.revenue(),
+                    share
+                ));
+            }
+            routes = withShare;
+        }
+
+        String monthLabel = "Tháng " + yearMonth.getMonthValue() + "/" + yearMonth.getYear();
+        return new RevenueByRouteReportDto(
+            yearMonth.toString(),
+            monthLabel,
+            Collections.unmodifiableList(routes),
+            totalTickets,
+            totalRevenue
         );
     }
 }

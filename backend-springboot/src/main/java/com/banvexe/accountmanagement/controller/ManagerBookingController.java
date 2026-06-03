@@ -9,6 +9,7 @@ import com.banvexe.accountmanagement.dto.booking.ManagerFullTicketRequest;
 import com.banvexe.accountmanagement.dto.booking.ManagerTicketListItemDto;
 import com.banvexe.accountmanagement.dto.booking.ManagerTicketStatsDto;
 import com.banvexe.accountmanagement.dto.booking.MonthlyRevenuePointDto;
+import com.banvexe.accountmanagement.dto.booking.RevenueByRouteReportDto;
 import com.banvexe.accountmanagement.dto.booking.RevenueDailyReportDto;
 import com.banvexe.accountmanagement.dto.booking.ManagerTicketStatusRequest;
 import com.banvexe.accountmanagement.dto.booking.RouteSummaryDto;
@@ -114,6 +115,22 @@ public class ManagerBookingController {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "yearMonth không hợp lệ: " + yearMonthRaw);
         }
         return ResponseEntity.ok(ApiResponse.success(revenueReportService.buildDailyReport(ym)));
+    }
+
+    @GetMapping("/revenue/by-route")
+    public ResponseEntity<ApiResponse<RevenueByRouteReportDto>> getRevenueByRoute(
+        @RequestParam("yearMonth") String yearMonthRaw
+    ) {
+        if (yearMonthRaw == null || yearMonthRaw.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Thiếu tham số yearMonth (định dạng yyyy-MM)");
+        }
+        YearMonth ym;
+        try {
+            ym = YearMonth.parse(yearMonthRaw.trim());
+        } catch (DateTimeParseException e) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "yearMonth không hợp lệ: " + yearMonthRaw);
+        }
+        return ResponseEntity.ok(ApiResponse.success(revenueReportService.buildRouteReport(ym)));
     }
 
     @GetMapping("/tickets")

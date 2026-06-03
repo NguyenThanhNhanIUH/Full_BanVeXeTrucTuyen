@@ -20,6 +20,23 @@ public interface VeXeRepository extends JpaRepository<VeXe, Integer> {
     @Query("select v.ngayDat, v.tongTien from VeXe v where v.trangThai in :statuses")
     List<Object[]> findNgayDatAndTongTienByTrangThaiIn(@Param("statuses") Collection<TicketStatus> statuses);
 
+    @Query("""
+        select t.id, t.tenTuyen, t.diemDi, t.diemDen, count(v), coalesce(sum(v.tongTien), 0)
+        from VeXe v
+        join v.chuyenXe c
+        join c.tuyenXe t
+        where v.trangThai in :statuses
+        and v.ngayDat >= :startInclusive
+        and v.ngayDat < :endExclusive
+        group by t.id, t.tenTuyen, t.diemDi, t.diemDen
+        order by sum(v.tongTien) desc
+        """)
+    List<Object[]> sumRevenueByRouteBetween(
+        @Param("statuses") Collection<TicketStatus> statuses,
+        @Param("startInclusive") Instant startInclusive,
+        @Param("endExclusive") Instant endExclusive
+    );
+
     boolean existsByMaVeAndIdNot(String maVe, Integer id);
 
     Optional<VeXe> findByMaVe(String maVe);

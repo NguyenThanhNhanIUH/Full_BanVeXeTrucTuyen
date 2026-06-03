@@ -1,7 +1,9 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { BarChart3, ChevronDown, RefreshCw, Ticket, Wallet } from 'lucide-react';
+import { BarChart3, ChevronDown, MapPin, RefreshCw, Ticket, Wallet } from 'lucide-react';
 import {
   Area,
+  Bar,
+  BarChart,
   CartesianGrid,
   ComposedChart,
   Line,
@@ -33,6 +35,25 @@ type DailyReport = {
   totalRevenue?: number | string;
 };
 
+type RouteRow = {
+  routeId?: number;
+  tenTuyen?: string;
+  diemDi?: string;
+  diemDen?: string;
+  shortLabel?: string;
+  ticketCount?: number;
+  revenue?: number | string;
+  revenueSharePercent?: number;
+};
+
+type RouteReport = {
+  yearMonth?: string;
+  monthLabel?: string;
+  routes?: RouteRow[];
+  totalTicketsSold?: number;
+  totalRevenue?: number | string;
+};
+
 const formatVnd = (n: number) =>
   new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND', maximumFractionDigits: 0 }).format(
     Number.isFinite(n) ? Math.round(n) : 0,
@@ -57,10 +78,12 @@ function currentYearMonthLocal(): string {
 const RevenuePage: React.FC = () => {
   const [monthsLoading, setMonthsLoading] = useState(true);
   const [dailyLoading, setDailyLoading] = useState(true);
+  const [routeLoading, setRouteLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
   const [monthOptions, setMonthOptions] = useState<MonthOption[]>([]);
   const [selectedYearMonth, setSelectedYearMonth] = useState<string>('');
   const [daily, setDaily] = useState<DailyReport | null>(null);
+  const [byRoute, setByRoute] = useState<RouteReport | null>(null);
 
   const loadMonths = useCallback(async () => {
     setMonthsLoading(true);
@@ -102,6 +125,23 @@ const RevenuePage: React.FC = () => {
     }
   }, []);
 
+  const loadByRoute = useCallback(async (yearMonth: string) => {
+    if (!yearMonth) return;
+    setRouteLoading(true);
+    try {
+      const res = await api.get<{ data?: RouteReport }>('/api/manager/revenue/by-route', {
+        params: { yearMonth },
+      });
+      setByRoute(res.data?.data ?? null);
+    } catch (e) {
+      console.error(e);
+      setErr((e as { response?: { data?: { message?: string } } })?.response?.data?.message || 'Không tải được doanh thu theo tuyến.');
+      setByRoute(null);
+    } finally {
+      setRouteLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     void loadMonths();
   }, [loadMonths]);
@@ -109,11 +149,15 @@ const RevenuePage: React.FC = () => {
   useEffect(() => {
     if (!selectedYearMonth) return;
     void loadDaily(selectedYearMonth);
-  }, [selectedYearMonth, loadDaily]);
+    void loadByRoute(selectedYearMonth);
+  }, [selectedYearMonth, loadDaily, loadByRoute]);
 
   const onRefresh = () => {
     void loadMonths();
-    if (selectedYearMonth) void loadDaily(selectedYearMonth);
+    if (selectedYearMonth) {
+      void loadDaily(selectedYearMonth);
+      void loadByRoute(selectedYearMonth);
+    }
   };
 
   const chartData = useMemo(() => {
@@ -126,9 +170,26 @@ const RevenuePage: React.FC = () => {
     }));
   }, [daily]);
 
+  const routeRows = useMemo(() => {
+    const routes = byRoute?.routes ?? [];
+    return routes.map((r) => ({
+      routeId: r.routeId,
+      tenTuyen: r.tenTuyen || '',
+      diemDi: r.diemDi || '',
+      diemDen: r.diemDen || '',
+      shortLabel: r.shortLabel || r.tenTuyen || `${r.diemDi} → ${r.diemDen}`,
+      ticketCount: Number(r.ticketCount) || 0,
+      revenue: toNum(r.revenue),
+      share: Number(r.revenueSharePercent) || 0,
+    }));
+  }, [byRoute]);
+
+  const routeChartData = useMemo(() => routeRows.slice(0, 8), [routeRows]);
+
   const totalTickets = Number(daily?.totalTicketsSold) || 0;
   const totalRevenue = toNum(daily?.totalRevenue);
   const chartBusy = monthsLoading || dailyLoading;
+  const routeBusy = monthsLoading || routeLoading;
   const hasAnyMonthOption = monthOptions.length > 0;
 
   return (
@@ -141,7 +202,7 @@ const RevenuePage: React.FC = () => {
           <div>
             <h1 className="text-2xl font-bold tracking-tight text-gray-900">Doanh thu</h1>
             <p className="mt-0.5 text-sm text-gray-500">
-              <strong className="text-gray-700">Theo ngày</strong> trong tháng bạn chọn (giờ Việt Nam). Chỉ vé{' '}
+              <strong className="text-gray-700">Theo ngày</strong> và <strong className="text-gray-700">theo tuyến</strong> trong tháng bạn chọn (giờ Việt Nam). Chỉ vé{' '}
               <strong className="text-gray-700">đã thanh toán</strong> và <strong className="text-gray-700">hoàn thành chuyến</strong>.
             </p>
           </div>
@@ -149,10 +210,10 @@ const RevenuePage: React.FC = () => {
         <button
           type="button"
           onClick={() => onRefresh()}
-          disabled={chartBusy}
+          disabled={chartBusy || routeBusy}
           className="inline-flex items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-semibold text-gray-700 shadow-sm transition hover:border-[#ef5222]/30 hover:bg-[#fff8f5] disabled:opacity-60"
         >
-          <RefreshCw size={16} className={chartBusy ? 'animate-spin' : ''} />
+          <RefreshCw size={16} className={chartBusy || routeBusy ? 'animate-spin' : ''} />
           Làm mới
         </button>
       </div>
@@ -293,6 +354,128 @@ const RevenuePage: React.FC = () => {
             <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-[#fff0eb] text-[#ef5222] ring-1 ring-[#ffdbcf]">
               <Wallet size={26} />
             </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="overflow-hidden rounded-3xl border border-[#00613d]/15 bg-white shadow-xl shadow-emerald-100/30 ring-1 ring-black/[0.03]">
+        <div className="border-b border-gray-100 bg-gradient-to-r from-[#f0faf5] via-white to-[#fff8f5] px-5 py-4 sm:px-7">
+          <div className="flex items-start gap-3">
+            <span className="mt-0.5 flex h-10 w-10 items-center justify-center rounded-2xl bg-[#00613d]/10 text-[#00613d]">
+              <MapPin size={20} />
+            </span>
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[#00613d]">Theo tuyến</p>
+              <h2 className="mt-1 text-lg font-bold text-gray-800">Top tuyến theo doanh thu</h2>
+              <p className="mt-0.5 text-sm text-gray-500">
+                Gom vé đã thanh toán theo <strong className="font-semibold text-gray-700">tuyến xe</strong>
+                {byRoute?.monthLabel ? (
+                  <>
+                    {' '}
+                    · <span className="font-semibold text-gray-700">{byRoute.monthLabel}</span>
+                  </>
+                ) : null}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 gap-0 xl:grid-cols-5">
+          <div className="border-b border-gray-100 p-4 sm:p-7 xl:col-span-2 xl:border-b-0 xl:border-r">
+            {routeBusy ? (
+              <div className="flex h-[280px] items-center justify-center text-sm text-gray-500">Đang tải theo tuyến…</div>
+            ) : routeChartData.length === 0 ? (
+              <div className="flex h-[280px] flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-gray-200 bg-gray-50/80 text-center">
+                <MapPin className="text-gray-300" size={36} />
+                <p className="text-sm font-medium text-gray-600">Chưa có doanh thu theo tuyến trong tháng này</p>
+              </div>
+            ) : (
+              <div className="h-[min(360px,50vh)] w-full min-h-[260px]">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={routeChartData} layout="vertical" margin={{ top: 4, right: 12, left: 4, bottom: 4 }}>
+                    <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#e5e7eb" />
+                    <XAxis
+                      type="number"
+                      tickFormatter={(v) => (v >= 1_000_000 ? `${Math.round(v / 1_000_000)}tr` : `${Math.round(v / 1000)}k`)}
+                      tick={{ fill: '#9ca3af', fontSize: 11 }}
+                      axisLine={false}
+                      tickLine={false}
+                    />
+                    <YAxis
+                      type="category"
+                      dataKey="shortLabel"
+                      width={108}
+                      tick={{ fill: '#4b5563', fontSize: 11 }}
+                      axisLine={false}
+                      tickLine={false}
+                    />
+                    <Tooltip
+                      content={({ active, payload }) => {
+                        if (!active || !payload?.length) return null;
+                        const p = payload[0]?.payload as {
+                          tenTuyen?: string;
+                          diemDi?: string;
+                          diemDen?: string;
+                          revenue?: number;
+                          ticketCount?: number;
+                          share?: number;
+                        };
+                        return (
+                          <div className="max-w-xs rounded-xl border border-gray-100 bg-white px-3 py-2 shadow-lg">
+                            <p className="text-sm font-semibold text-gray-800">{p.tenTuyen || `${p.diemDi} → ${p.diemDen}`}</p>
+                            <p className="text-sm font-bold text-[#00613d]">{formatVnd(Number(p.revenue) || 0)}</p>
+                            <p className="text-xs text-gray-600">
+                              {p.ticketCount ?? 0} vé · {(p.share ?? 0).toFixed(1)}%
+                            </p>
+                          </div>
+                        );
+                      }}
+                    />
+                    <Bar dataKey="revenue" fill="#00613d" radius={[0, 6, 6, 0]} maxBarSize={28} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+          </div>
+
+          <div className="overflow-x-auto p-4 sm:p-7 xl:col-span-3">
+            {routeBusy ? (
+              <div className="py-10 text-center text-sm text-gray-500">Đang tải bảng tuyến…</div>
+            ) : routeRows.length === 0 ? (
+              <div className="py-10 text-center text-sm text-gray-500">Không có dữ liệu tuyến trong tháng đang chọn.</div>
+            ) : (
+              <table className="min-w-full text-left text-sm">
+                <thead>
+                  <tr className="border-b border-gray-100 text-xs uppercase tracking-wide text-gray-500">
+                    <th className="pb-3 pr-4 font-semibold">#</th>
+                    <th className="pb-3 pr-4 font-semibold">Tuyến</th>
+                    <th className="pb-3 pr-4 font-semibold text-right">Vé</th>
+                    <th className="pb-3 pr-4 font-semibold text-right">Doanh thu</th>
+                    <th className="pb-3 font-semibold text-right">Tỷ lệ</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {routeRows.map((row, idx) => (
+                    <tr key={row.routeId ?? idx} className="border-b border-gray-50 last:border-0">
+                      <td className="py-3 pr-4 tabular-nums text-gray-400">{idx + 1}</td>
+                      <td className="py-3 pr-4">
+                        <p className="font-semibold text-gray-800">{row.tenTuyen || `${row.diemDi} → ${row.diemDen}`}</p>
+                        <p className="text-xs text-gray-500">
+                          {row.diemDi} → {row.diemDen}
+                        </p>
+                      </td>
+                      <td className="py-3 pr-4 text-right tabular-nums font-medium text-gray-700">
+                        {row.ticketCount.toLocaleString('vi-VN')}
+                      </td>
+                      <td className="py-3 pr-4 text-right tabular-nums font-semibold text-[#00613d]">
+                        {formatVnd(row.revenue)}
+                      </td>
+                      <td className="py-3 text-right tabular-nums text-gray-600">{row.share.toFixed(1)}%</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
           </div>
         </div>
       </div>
