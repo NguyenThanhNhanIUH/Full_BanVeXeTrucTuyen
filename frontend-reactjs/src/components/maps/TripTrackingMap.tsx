@@ -50,47 +50,65 @@ const TripTrackingMap = ({ tripId, active }: TripTrackingMapProps) => {
   const busMarkerRef = useRef<L.Marker | null>(null);
   const originMarkerRef = useRef<L.Marker | null>(null);
   const destMarkerRef = useRef<L.Marker | null>(null);
+  const demoRef = useRef(false);
   const [tracking, setTracking] = useState<TripTrackingData | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [initialLoading, setInitialLoading] = useState(true);
   const [error, setError] = useState('');
   const [forceDemo, setForceDemo] = useState(false);
 
+  const destroyMap = useCallback(() => {
+    if (mapRef.current) {
+      mapRef.current.remove();
+      mapRef.current = null;
+    }
+    routeRef.current = null;
+    busMarkerRef.current = null;
+    originMarkerRef.current = null;
+    destMarkerRef.current = null;
+  }, []);
+
   const fetchTracking = useCallback(
-    (demo = false) =>
-      api
-        .get<ApiResponse<TripTrackingData>>(`/api/catalog/trips/${tripId}/tracking`, { params: { demo } })
-        .then((res) => {
-          if (res.data?.data) {
-            setTracking(res.data.data);
-            setError('');
-          }
-        })
-        .catch(() => setError('Không tải được vị trí xe.')),
+    async (demo = false) => {
+      const res = await api.get<ApiResponse<TripTrackingData>>(`/api/catalog/trips/${tripId}/tracking`, { params: { demo } });
+      if (res.data?.data) {
+        setTracking(res.data.data);
+        demoRef.current = Boolean(res.data.data.cheDoDemo || demo);
+        setError('');
+      }
+    },
     [tripId],
   );
 
   useEffect(() => {
     if (!active) return;
     let cancelled = false;
-    setLoading(true);
+    setInitialLoading(true);
+    setError('');
 
-    void fetchTracking(forceDemo).finally(() => {
-      if (!cancelled) setLoading(false);
-    });
+    void fetchTracking(forceDemo)
+      .catch(() => {
+        if (!cancelled) setError('Không tải được vị trí xe.');
+      })
+      .finally(() => {
+        if (!cancelled) setInitialLoading(false);
+      });
 
-    const intervalMs = forceDemo || tracking?.cheDoDemo ? 3000 : 15000;
     const timer = window.setInterval(() => {
-      void fetchTracking(forceDemo);
-    }, intervalMs);
+      void fetchTracking(forceDemo || demoRef.current).catch(() => undefined);
+    }, 3000);
 
     return () => {
       cancelled = true;
       window.clearInterval(timer);
     };
-  }, [tripId, active, forceDemo, fetchTracking, tracking?.cheDoDemo]);
+  }, [tripId, active, forceDemo, fetchTracking]);
 
   useEffect(() => {
-    if (!active || !containerRef.current || !tracking) return;
+    if (!active) {
+      destroyMap();
+      return;
+    }
+    if (!containerRef.current || !tracking) return;
 
     if (!mapRef.current) {
       mapRef.current = L.map(containerRef.current, {
@@ -136,34 +154,20 @@ const TripTrackingMap = ({ tripId, active }: TripTrackingMapProps) => {
     }
 
     map.fitBounds(L.latLngBounds([origin, dest, bus]).pad(0.2));
+    window.requestAnimationFrame(() => {
+      map.invalidateSize();
+    });
+  }, [active, tracking, destroyMap]);
 
-    return undefined;
-  }, [active, tracking]);
+  useEffect(() => () => destroyMap(), [destroyMap]);
 
-  useEffect(() => {
-    if (active) return;
-    if (mapRef.current) {
-      mapRef.current.remove();
-      mapRef.current = null;
-      routeRef.current = null;
-      busMarkerRef.current = null;
-      originMarkerRef.current = null;
-      destMarkerRef.current = null;
-    }
-  }, [active]);
-
-  useEffect(
-    () => () => {
-      if (mapRef.current) {
-        mapRef.current.remove();
-        mapRef.current = null;
-      }
-    },
-    [],
-  );
-
-  if (loading) {
-    return <p className="text-sm text-gray-500">Đang tải bản đồ theo dõi...</p>;
+  if (initialLoading) {
+    return (
+      <div className="space-y-3">
+        <p className="text-sm text-gray-500">Đang tải bản đồ theo dõi...</p>
+        <div className="h-72 w-full animate-pulse rounded-xl border border-gray-200 bg-gray-100 sm:h-80" />
+      </div>
+    );
   }
 
   if (error) {
@@ -178,15 +182,8 @@ const TripTrackingMap = ({ tripId, active }: TripTrackingMapProps) => {
 
   return (
     <div className="space-y-3">
-      {isDemo ? (
-        <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
-          <strong>Chế độ demo:</strong> chuyến trong DB chưa tới giờ chạy thật — xe mô phỏng di chuyển trên tuyến (~2 phút/vòng) để bạn báo cáo thử nghiệm.
-        </div>
-      ) : null}
       <div className="flex flex-wrap items-center gap-2 text-sm">
-        <span className={`rounded-full px-3 py-1 font-semibold ${isDemo ? 'bg-amber-100 text-amber-800' : 'bg-blue-50 text-blue-700'}`}>
-          {tracking.trangThaiHienThi}
-        </span>
+        <span className="rounded-full bg-blue-50 px-3 py-1 font-semibold text-blue-700">{tracking.trangThaiHienThi}</span>
         <span className="text-gray-600">
           Tiến độ: <strong>{tracking.tienDoPhanTram}%</strong>
         </span>
@@ -210,12 +207,9 @@ const TripTrackingMap = ({ tripId, active }: TripTrackingMapProps) => {
           </button>
         ) : null}
       </div>
-      <div ref={containerRef} className="h-72 w-full overflow-hidden rounded-xl border border-gray-200 sm:h-80" />
+      <div ref={containerRef} className="trip-tracking-map h-72 w-full rounded-xl border border-gray-200 sm:h-80" />
       <p className="text-xs text-gray-500">
-        {isDemo
-          ? 'Demo cập nhật mỗi 3 giây. Khi tới đúng ngày/giờ chạy thật, hệ thống tự chuyển sang theo dõi thực.'
-          : 'Vị trí ước tính theo lịch chuyến, cập nhật mỗi 15 giây.'}{' '}
-        {tracking.diemDi} → {tracking.diemDen}.
+        Cập nhật mỗi 3 giây · {tracking.diemDi} → {tracking.diemDen}
       </p>
     </div>
   );

@@ -146,7 +146,7 @@ public class BookingCatalogService {
         if (forceDemo) {
             progress = demoProgressSeconds();
             statusCode = "DEMO";
-            statusLabel = "Demo hành trình";
+            statusLabel = "Đang trên đường";
             cheDoDemo = true;
         } else if (runStatus == TripRunStatus.HUY_CHUYEN) {
             progress = 0;
@@ -165,7 +165,7 @@ public class BookingCatalogService {
         } else {
             progress = demoProgressSeconds();
             statusCode = "DEMO";
-            statusLabel = "Demo hành trình (chưa tới giờ chạy)";
+            statusLabel = "Đang trên đường";
             cheDoDemo = true;
         }
 
