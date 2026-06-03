@@ -20,13 +20,20 @@ import com.banvexe.accountmanagement.repository.ThanhToanRepository;
 import com.banvexe.accountmanagement.repository.VeXeRepository;
 import com.banvexe.accountmanagement.util.TicketGhiChuUtil;
 import java.math.BigDecimal;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import org.hibernate.Hibernate;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -78,23 +85,44 @@ public class ManagerTicketService {
     public PageResponse<ManagerTicketListItemDto> listTickets(int page, int size, TicketStatus status) {
         int p = Math.max(0, page);
         int s = size < 1 ? 10 : Math.min(size, MAX_PAGE);
-        List<VeXe> all = status == null
-            ? veXeRepository.findAllForManagerListWithFetches()
-            : veXeRepository.findByTrangThaiForManagerListWithFetches(status);
-        long total = all.size();
-        int totalPages = total == 0 ? 0 : (int) ((total + s - 1) / s);
-        int from = p * s;
-        if (from >= (int) total) {
-            return new PageResponse<>(List.of(), p, s, total, totalPages);
+        var pageable = PageRequest.of(p, s, Sort.by(Sort.Direction.DESC, "ngayDat"));
+        Page<VeXe> ticketPage = status == null
+            ? veXeRepository.findAllByOrderByNgayDatDesc(pageable)
+            : veXeRepository.findByTrangThaiOrderByNgayDatDesc(status, pageable);
+
+        List<Integer> ids = ticketPage.getContent().stream().map(VeXe::getId).toList();
+        if (ids.isEmpty()) {
+            return new PageResponse<>(List.of(), p, s, ticketPage.getTotalElements(), ticketPage.getTotalPages());
         }
-        int to = (int) Math.min((long) from + s, total);
-        List<VeXe> slice = all.subList(from, to);
+
+        Map<Integer, VeXe> byId = veXeRepository.findByIdInWithChuyenXe(ids).stream()
+            .collect(Collectors.toMap(VeXe::getId, Function.identity(), (a, b) -> a));
+        Set<Integer> khachIds = new HashSet<>();
+        for (Integer id : ids) {
+            VeXe ve = byId.get(id);
+            if (ve != null && ve.getKhachHangId() != null) {
+                khachIds.add(ve.getKhachHangId());
+            }
+        }
+        Map<Integer, KhachHang> khachById = new HashMap<>();
+        if (!khachIds.isEmpty()) {
+            for (KhachHang kh : khachHangRepository.findAllById(khachIds)) {
+                khachById.put(kh.getId(), kh);
+            }
+        }
+
+        List<ManagerTicketListItemDto> items = ids.stream()
+            .map(byId::get)
+            .filter(Objects::nonNull)
+            .map(v -> toListItem(v, khachById.get(v.getKhachHangId())))
+            .toList();
+
         return new PageResponse<>(
-            slice.stream().map(this::toListItem).toList(),
+            items,
             p,
             s,
-            total,
-            totalPages
+            ticketPage.getTotalElements(),
+            ticketPage.getTotalPages()
         );
     }
 
@@ -228,7 +256,7 @@ public class ManagerTicketService {
         return staffBookingService.getTicketDetailById(ticketId);
     }
 
-    private ManagerTicketListItemDto toListItem(VeXe v) {
+    private ManagerTicketListItemDto toListItem(VeXe v, KhachHang kh) {
         ChuyenXe c = v.getChuyenXe();
         TuyenXe t = null;
         if (c != null) {
@@ -244,7 +272,6 @@ public class ManagerTicketService {
         if (c != null && t == null) {
             log.warn("VeXe #{}: chuyen #{} thieu tuyen; kiem tra FK chuyen.tuyen_xe_id.", v.getId(), c.getId());
         }
-        KhachHang kh = khachHangRepository.findById(v.getKhachHangId()).orElse(null);
         String tenTuyen;
         if (t != null && t.getTenTuyen() != null) {
             tenTuyen = t.getTenTuyen();

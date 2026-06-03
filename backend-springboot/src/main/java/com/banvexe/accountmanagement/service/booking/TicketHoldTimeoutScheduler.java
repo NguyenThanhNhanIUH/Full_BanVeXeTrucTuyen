@@ -12,6 +12,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 
 @Component
 public class TicketHoldTimeoutScheduler {
@@ -30,6 +31,7 @@ public class TicketHoldTimeoutScheduler {
     }
 
     @Scheduled(fixedDelayString = "${app.booking.hold-check-delay-ms:30000}")
+    @Transactional
     public void cancelExpiredPendingTickets() {
         try {
             Instant cutoff = Instant.now().minus(holdMinutes, ChronoUnit.MINUTES);

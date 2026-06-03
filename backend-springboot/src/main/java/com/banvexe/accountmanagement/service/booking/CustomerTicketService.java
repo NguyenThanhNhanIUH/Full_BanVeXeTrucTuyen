@@ -25,6 +25,7 @@ import com.banvexe.accountmanagement.repository.ThanhToanRepository;
 import com.banvexe.accountmanagement.repository.UserAccountRepository;
 import com.banvexe.accountmanagement.repository.VeXeRepository;
 import com.banvexe.accountmanagement.util.TicketGhiChuUtil;
+import com.banvexe.accountmanagement.util.AfterCommit;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDateTime;
@@ -188,12 +189,20 @@ public class CustomerTicketService {
         seatSelectionHoldService.releaseSeats(chuyen.getId(), seats);
 
         VeXe saved = veXeRepository.findByIdWithDetails(ve.getId()).orElse(ve);
-        if (datTruoc) {
-            bookingNotificationService.sendDeferredBookingSuccess(kh, saved, saved.getHanThanhToan());
-            customerNotificationService.notifyDeferredBooking(kh, saved);
-        } else {
-            bookingNotificationService.sendBookingSuccess(kh, saved);
-        }
+        final Integer savedId = saved.getId();
+        final Instant paymentDeadline = saved.getHanThanhToan();
+        AfterCommit.run(() -> {
+            VeXe ticketForNotify = veXeRepository.findByIdWithDetails(savedId).orElse(null);
+            if (ticketForNotify == null) {
+                return;
+            }
+            if (datTruoc) {
+                bookingNotificationService.sendDeferredBookingSuccess(kh, ticketForNotify, paymentDeadline);
+                customerNotificationService.notifyDeferredBooking(kh, ticketForNotify);
+            } else {
+                bookingNotificationService.sendBookingSuccess(kh, ticketForNotify);
+            }
+        });
 
         return toCustomerDto(saved);
     }
@@ -256,7 +265,15 @@ public class CustomerTicketService {
 
         ve.setTrangThai(TicketStatus.DA_THANH_TOAN);
         veXeRepository.save(ve);
-        bookingNotificationService.sendPaymentSuccess(kh, List.of(ve), tt.getMaGiaoDich());
+        final String txnRef = tt.getMaGiaoDich();
+        final Integer ticketIdForNotify = ve.getId();
+        AfterCommit.run(() -> {
+            VeXe ticketForNotify = veXeRepository.findByIdWithDetails(ticketIdForNotify).orElse(null);
+            if (ticketForNotify == null) {
+                return;
+            }
+            bookingNotificationService.sendPaymentSuccess(kh, List.of(ticketForNotify), txnRef);
+        });
     }
 
     public List<CustomerTicketDto> myTickets(String email) {

@@ -6,6 +6,8 @@ import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -83,6 +85,13 @@ public interface VeXeRepository extends JpaRepository<VeXe, Integer> {
 
     @Query("select v from VeXe v left join fetch v.chuyenXe c where v.trangThai = :st order by v.ngayDat desc")
     List<VeXe> findByTrangThaiForManagerListWithFetches(@Param("st") TicketStatus st);
+
+    Page<VeXe> findAllByOrderByNgayDatDesc(Pageable pageable);
+
+    Page<VeXe> findByTrangThaiOrderByNgayDatDesc(TicketStatus trangThai, Pageable pageable);
+
+    @Query("select distinct v from VeXe v left join fetch v.chuyenXe c where v.id in :ids")
+    List<VeXe> findByIdInWithChuyenXe(@Param("ids") Collection<Integer> ids);
 
     /**
      * Ghi đè trạng thái + ghi chú một cách tường minh (tránh trường hợp bản thực thể

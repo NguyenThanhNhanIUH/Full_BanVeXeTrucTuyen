@@ -11,6 +11,7 @@ import com.banvexe.accountmanagement.entity.VeXe;
 import com.banvexe.accountmanagement.repository.KhachHangRepository;
 import com.banvexe.accountmanagement.repository.ThanhToanRepository;
 import com.banvexe.accountmanagement.repository.VeXeRepository;
+import com.banvexe.accountmanagement.util.AfterCommit;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.math.BigDecimal;
@@ -298,16 +299,30 @@ public class PayOsService {
     }
 
     private void notifyPaymentSuccessForOrder(List<ThanhToan> txns, Long orderCode) {
-        List<VeXe> tickets = txns.stream()
+        List<Integer> ticketIds = txns.stream()
             .map(ThanhToan::getVeXe)
             .filter(v -> v != null)
+            .map(VeXe::getId)
             .toList();
-        if (tickets.isEmpty()) return;
-        Integer khachId = tickets.get(0).getKhachHangId();
+        if (ticketIds.isEmpty()) return;
+        Integer khachId = txns.stream()
+            .map(ThanhToan::getVeXe)
+            .filter(v -> v != null)
+            .map(VeXe::getKhachHangId)
+            .filter(id -> id != null)
+            .findFirst()
+            .orElse(null);
         if (khachId == null) return;
-        khachHangRepository.findById(khachId).ifPresent(khach ->
-            bookingNotificationService.sendPaymentSuccess(khach, tickets, "PAYOS-" + orderCode)
-        );
+        final String paymentRef = "PAYOS-" + orderCode;
+        AfterCommit.run(() -> khachHangRepository.findById(khachId).ifPresent(khach -> {
+            List<VeXe> tickets = ticketIds.stream()
+                .map(id -> veXeRepository.findByIdWithDetails(id).orElse(null))
+                .filter(v -> v != null)
+                .toList();
+            if (!tickets.isEmpty()) {
+                bookingNotificationService.sendPaymentSuccess(khach, tickets, paymentRef);
+            }
+        }));
     }
 
     private boolean isPaidStatus(String status) {
