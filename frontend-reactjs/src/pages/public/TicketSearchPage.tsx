@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { FileText, Search, Ticket, User } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { api } from '../../api/client';
+import TripTrackingSection from '../../components/maps/TripTrackingSection';
 
 type TicketSearchLocationState = {
   highlightedTicketCodes?: string[];
@@ -67,6 +68,8 @@ const buildTicketQrUrl = (ticketCode?: string) => {
   const payload = `BANVEXE:${ticketCode}`;
   return `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(payload)}`;
 };
+
+const canShowTripTracking = (status?: string) => status !== 'DA_HUY';
 
 const TicketSearchPage = () => {
   const location = useLocation();
@@ -415,6 +418,10 @@ const TicketSearchPage = () => {
                       </p>
                     </div>
                   </div>
+
+                  {ticketResult.chuyen?.id && canShowTripTracking(ticketResult.trangThai) ? (
+                    <TripTrackingSection tripId={ticketResult.chuyen.id} className="md:col-span-2" />
+                  ) : null}
                 </div>
               )}
             </section>
