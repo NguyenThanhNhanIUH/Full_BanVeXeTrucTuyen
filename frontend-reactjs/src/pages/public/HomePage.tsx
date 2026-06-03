@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate, useOutletContext } from 'react-router-dom';
 import { api } from '../../api/client';
 import type { PublicBranding } from '../../types/publicBranding';
@@ -81,6 +81,7 @@ const HomePage = () => {
   const [dangTaiSoDoGhe, setDangTaiSoDoGhe] = useState(false);
   const [soDoGheTheoChuyen, setSoDoGheTheoChuyen] = useState<Record<number, SeatMapResponse>>({});
   const [gheDangChonTheoChuyen, setGheDangChonTheoChuyen] = useState<Record<number, string[]>>({});
+  const confirmedHoldsRef = useRef<Record<number, Set<string>>>({});
   const [routeDurationCache, setRouteDurationCache] = useState<Record<string, number>>({});
 
   useEffect(() => {
@@ -301,6 +302,7 @@ const HomePage = () => {
       try {
         if (current.includes(seat.maGhe)) {
           await api.post('/api/catalog/trips/' + tripId + '/seats/release', { holdToken, maGhe: seat.maGhe });
+          confirmedHoldsRef.current[tripId]?.delete(seat.maGhe);
           setGheDangChonTheoChuyen((prev) => ({
             ...prev,
             [tripId]: (prev[tripId] ?? []).filter((s) => s !== seat.maGhe),
@@ -312,6 +314,8 @@ const HomePage = () => {
           return;
         }
         await api.post('/api/catalog/trips/' + tripId + '/seats/hold', { holdToken, maGhe: seat.maGhe });
+        if (!confirmedHoldsRef.current[tripId]) confirmedHoldsRef.current[tripId] = new Set();
+        confirmedHoldsRef.current[tripId].add(seat.maGhe);
         setGheDangChonTheoChuyen((prev) => ({
           ...prev,
           [tripId]: [...(prev[tripId] ?? []), seat.maGhe],
@@ -335,6 +339,16 @@ const HomePage = () => {
         try {
           const parsed = JSON.parse(String(event.data)) as SeatMapResponse;
           setSoDoGheTheoChuyen((prev) => ({ ...prev, [tripId]: parsed }));
+          const confirmed = confirmedHoldsRef.current[tripId];
+          setGheDangChonTheoChuyen((prev) => ({
+            ...prev,
+            [tripId]: (prev[tripId] ?? []).filter((code) => {
+              const seat = parsed.ghe.find((g) => g.maGhe === code);
+              if (!seat || seat.daBan) return false;
+              if (seat.dangGiuCho && !confirmed?.has(code)) return false;
+              return true;
+            }),
+          }));
         } catch {
           // ignore malformed SSE payload
         }
@@ -875,6 +889,7 @@ const HomePage = () => {
                       dangTaiSoDoGhe={dangTaiSoDoGhe}
                       soDoGheTheoChuyen={soDoGheTheoChuyen}
                       gheDangChonTheoChuyen={gheDangChonTheoChuyen}
+                      confirmedHoldsForTrip={confirmedHoldsRef.current[trip.id]}
                       onToggleSeatPanel={toggleChonGhe}
                       onEnsureTripPanelOpen={ensureTripPanelOpen}
                       onSelectSeat={onSelectSeat}

@@ -153,6 +153,21 @@ const BookingPage = () => {
     localStorage.setItem(BOOKING_PHONE_KEY, phone.trim());
   }, [phone]);
 
+  useEffect(() => {
+    const handler = (event: Event) => {
+      const detail = (event as CustomEvent<{ chuyenId: number; seatCode: string }>).detail;
+      if (!detail) return;
+      if (detail.chuyenId === outboundTrip?.id) {
+        setSelectedOutboundSeats((prev) => prev.filter((s) => s !== detail.seatCode));
+      }
+      if (detail.chuyenId === returnTrip?.id) {
+        setSelectedReturnSeats((prev) => prev.filter((s) => s !== detail.seatCode));
+      }
+    };
+    window.addEventListener('banvexe:seat-lost', handler);
+    return () => window.removeEventListener('banvexe:seat-lost', handler);
+  }, [outboundTrip?.id, returnTrip?.id]);
+
   const totalOutbound = (selectedOutboundSeats.length || 0) * Number(outboundTrip?.giaVe || 0);
   const totalReturn = (selectedReturnSeats.length || 0) * Number(returnTrip?.giaVe || 0);
   const totalAmount = totalOutbound + totalReturn;
@@ -285,11 +300,12 @@ const BookingPage = () => {
     title: string,
     holdSeat: (maGhe: string) => Promise<void>,
     releaseSeat: (maGhe: string) => Promise<void>,
+    confirmedHolds: ReadonlySet<string>,
   ) => {
     if (!trip) return null;
     const onToggleSeat = (seat: SeatStatus) => {
       void (async () => {
-        if (isSeatUnavailable(seat, selectedSeats) && !selectedSeats.includes(seat.maGhe)) return;
+        if (isSeatUnavailable(seat, selectedSeats, confirmedHolds) && !selectedSeats.includes(seat.maGhe)) return;
         try {
           if (selectedSeats.includes(seat.maGhe)) {
             await releaseSeat(seat.maGhe);
@@ -323,10 +339,10 @@ const BookingPage = () => {
               const renderSeatButton = (seat: SeatStatus & { hienThiGhe?: string }, sizeClass = 'h-9 w-9 md:h-10 md:w-10') => {
                 if (!seat.maGhe) return null;
                 const isSelected = selectedSeats.includes(seat.maGhe);
-                const unavailable = isSeatUnavailable(seat, selectedSeats);
+                const unavailable = isSeatUnavailable(seat, selectedSeats, confirmedHolds);
                 const cls = seat.daBan
                   ? 'cursor-not-allowed border-gray-300 bg-gray-200 text-gray-400'
-                  : seat.dangGiuCho
+                  : seat.dangGiuCho && !confirmedHolds.has(seat.maGhe)
                     ? 'cursor-not-allowed border-amber-300 bg-amber-100 text-amber-700'
                     : isSelected
                       ? 'border-[#ef5222] bg-[#fff2ed] text-[#ef5222]'
@@ -518,6 +534,7 @@ const BookingPage = () => {
                   isRoundTrip ? 'Chọn ghế - Chuyến đi' : 'Chọn ghế',
                   outboundSeatMap.holdSeat,
                   outboundSeatMap.releaseSeat,
+                  outboundSeatMap.confirmedHoldsRef.current,
                 )}
                 {isRoundTrip &&
                   renderSeatSection(
@@ -529,6 +546,7 @@ const BookingPage = () => {
                   'Chọn ghế - Chuyến về',
                   returnSeatMap.holdSeat,
                   returnSeatMap.releaseSeat,
+                  returnSeatMap.confirmedHoldsRef.current,
                 )}
               </div>
               <div className="rounded-lg border border-gray-200 bg-[#fafafa] p-3 text-sm">

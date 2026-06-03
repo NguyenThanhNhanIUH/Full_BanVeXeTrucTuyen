@@ -6,10 +6,16 @@
 
 export type SeatStatus = { maGhe: string; daBan: boolean; dangGiuCho?: boolean };
 
-export function isSeatUnavailable(seat: SeatStatus, mySelectedSeats?: string[]): boolean {
+export function isSeatUnavailable(
+  seat: SeatStatus,
+  mySelectedSeats?: string[],
+  myConfirmedHolds?: ReadonlySet<string>,
+): boolean {
   if (seat.daBan) return true;
   if (!seat.dangGiuCho) return false;
-  return !mySelectedSeats?.includes(seat.maGhe);
+  if (myConfirmedHolds?.has(seat.maGhe)) return false;
+  if (mySelectedSeats?.includes(seat.maGhe)) return false;
+  return true;
 }
 
 /** API GET /api/catalog/trips/{id}/seats */

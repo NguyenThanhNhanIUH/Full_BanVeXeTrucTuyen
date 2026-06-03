@@ -14,10 +14,31 @@ function normalizePathname(pathname: string): string {
   return trimmed === '' ? '/' : trimmed;
 }
 
-/**
- * Lỗi 401/403 từ các API form đăng nhập/đăng ký/quên MK — không `location.replace('/')`.
- * Dùng `axios.getUri` vì sau khi merge baseURL, `config.url` đôi khi không còn dạng `/api/auth/login`.
- */
+function getRequestPath(config?: import('axios').InternalAxiosRequestConfig): string {
+  if (!config) return '';
+  try {
+    return new URL(axios.getUri(config), 'http://localhost').pathname;
+  } catch {
+    return `${config.baseURL || ''}${config.url || ''}`.split('?')[0];
+  }
+}
+
+/** Chỉ các API cần đăng nhập mới kích hoạt logout + redirect khi 401/403. */
+function isProtectedApiPath(path: string): boolean {
+  return (
+    path.startsWith('/api/accounts/me') ||
+    path.startsWith('/api/auth/me') ||
+    path.startsWith('/api/me/') ||
+    path.startsWith('/api/admin/') ||
+    path.startsWith('/api/staff/') ||
+    path.startsWith('/api/manager/')
+  );
+}
+
+function shouldStayOnPageAfterAuthError(pathname: string): boolean {
+  return pathname === '/' || pathname === '/login' || pathname === '/tra-cuu-ve' || pathname === '/dat-ve';
+}
+
 function isPublicAuthFormRequest(err: { config?: import('axios').InternalAxiosRequestConfig }): boolean {
   const config = err.config;
   if (!config) return false;
@@ -58,17 +79,17 @@ api.interceptors.response.use(
   (err) => {
     const st = err.response?.status;
     if (st === 401 || st === 403) {
+      const requestPath = getRequestPath(err.config);
+      if (!isProtectedApiPath(requestPath)) {
+        return Promise.reject(err);
+      }
       clearAuth();
       const currentPath =
         typeof window !== 'undefined' ? normalizePathname(window.location.pathname) : '/';
-      const shouldStayOnLookupPage = currentPath === '/tra-cuu-ve';
-      const shouldStayOnLoginPage = currentPath === '/login';
       const fromAuthForm = isPublicAuthFormRequest(err);
       if (
         typeof window !== 'undefined' &&
-        currentPath !== '/' &&
-        !shouldStayOnLookupPage &&
-        !shouldStayOnLoginPage &&
+        !shouldStayOnPageAfterAuthError(currentPath) &&
         !fromAuthForm
       ) {
         window.location.replace('/');

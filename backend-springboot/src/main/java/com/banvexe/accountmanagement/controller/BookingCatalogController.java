@@ -87,11 +87,14 @@ public class BookingCatalogController {
     }
 
     @GetMapping(value = "/trips/{id}/seats/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-    public SseEmitter streamSeatMap(@PathVariable Integer id) {
+    public ResponseEntity<SseEmitter> streamSeatMap(@PathVariable Integer id) {
         SseEmitter emitter = seatMapStreamService.subscribe(id);
         SeatMapDto seatMap = bookingCatalogService.getSeatMap(id);
         seatMapStreamService.sendSnapshot(emitter, seatMap);
-        return emitter;
+        return ResponseEntity.ok()
+            .header("Cache-Control", "no-cache, no-transform")
+            .header("X-Accel-Buffering", "no")
+            .body(emitter);
     }
 
     @PostMapping("/trips/{id}/seats/hold")

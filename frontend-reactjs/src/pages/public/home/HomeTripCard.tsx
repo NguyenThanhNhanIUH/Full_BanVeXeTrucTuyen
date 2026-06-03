@@ -18,6 +18,7 @@ type HomeTripCardProps = {
   dangTaiSoDoGhe: boolean;
   soDoGheTheoChuyen: Record<number, SeatMapResponse>;
   gheDangChonTheoChuyen: Record<number, string[]>;
+  confirmedHoldsForTrip?: ReadonlySet<string>;
   onToggleSeatPanel: (tripId: number) => void;
   onEnsureTripPanelOpen: (tripId: number) => void;
   onSelectSeat: (tripId: number, seat: SeatStatus) => void;
@@ -37,6 +38,7 @@ const HomeTripCard = ({
   dangTaiSoDoGhe,
   soDoGheTheoChuyen,
   gheDangChonTheoChuyen,
+  confirmedHoldsForTrip,
   onToggleSeatPanel,
   onEnsureTripPanelOpen,
   onSelectSeat,
@@ -179,10 +181,11 @@ const HomeTripCard = ({
                     const renderSeatButton = (seat: SeatStatus & { hienThiGhe?: string }, sizeClass = 'w-11 h-11 md:w-12 md:h-12') => {
                       if (!seat.maGhe) return null;
                       const selected = (gheDangChonTheoChuyen[trip.id] ?? []).includes(seat.maGhe);
-                      const unavailable = isSeatUnavailable(seat, gheDangChonTheoChuyen[trip.id] ?? []);
+                      const confirmed = confirmedHoldsForTrip;
+                      const unavailable = isSeatUnavailable(seat, gheDangChonTheoChuyen[trip.id] ?? [], confirmed);
                       const seatClass = seat.daBan
                         ? 'bg-gray-200 text-gray-400 border-gray-300 cursor-not-allowed'
-                        : seat.dangGiuCho
+                        : seat.dangGiuCho && !confirmed?.has(seat.maGhe)
                           ? 'bg-amber-100 text-amber-700 border-amber-300 cursor-not-allowed'
                           : selected
                             ? 'bg-[#fff3ef] text-[#ef5222] border-[#ef5222] cursor-pointer shadow-[0_2px_6px_rgba(239,82,34,0.2)]'

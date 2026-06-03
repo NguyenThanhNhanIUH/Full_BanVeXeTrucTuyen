@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../api/client';
 import type { SeatMapResponse } from '../utils/seatMapLayout';
 import { getApiBaseUrl, getSeatHoldToken } from '../utils/seatHold';
@@ -9,46 +9,91 @@ type ApiResponse<T> = {
   data: T;
 };
 
+const applyMapUpdate = (
+  map: SeatMapResponse,
+  confirmedHolds: Set<string>,
+  onConflict?: (seatCode: string) => void,
+) => {
+  for (const seat of map.ghe) {
+    if (seat.dangGiuCho && !confirmedHolds.has(seat.maGhe)) {
+      onConflict?.(seat.maGhe);
+    }
+  }
+};
+
 export function useRealtimeSeatMap(chuyenId?: number) {
   const [map, setMap] = useState<SeatMapResponse | null>(null);
   const [loading, setLoading] = useState(Boolean(chuyenId));
+  const confirmedHoldsRef = useRef<Set<string>>(new Set());
   const holdToken = useMemo(() => (chuyenId ? getSeatHoldToken(chuyenId) : ''), [chuyenId]);
+
+  const syncMap = useCallback((nextMap: SeatMapResponse, notifyConflict = false) => {
+    if (notifyConflict) {
+      applyMapUpdate(nextMap, confirmedHoldsRef.current, (seatCode) => {
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('banvexe:seat-lost', { detail: { chuyenId, seatCode } }));
+        }
+      });
+    }
+    setMap(nextMap);
+  }, [chuyenId]);
 
   useEffect(() => {
     if (!chuyenId) return;
     let active = true;
+    let eventSource: EventSource | null = null;
+    let reconnectTimer: number | undefined;
+    let pollTimer: number | undefined;
 
-    api
-      .get<ApiResponse<SeatMapResponse>>(`/api/catalog/trips/${chuyenId}/seats`)
-      .then((res) => {
-        if (active) setMap(res.data?.data ?? null);
-      })
-      .finally(() => {
-        if (active) setLoading(false);
-      });
+    const fetchMap = () =>
+      api
+        .get<ApiResponse<SeatMapResponse>>(`/api/catalog/trips/${chuyenId}/seats`)
+        .then((res) => {
+          if (active && res.data?.data) syncMap(res.data.data, true);
+        })
+        .catch(() => undefined);
 
-    const base = getApiBaseUrl();
-    const eventSource = base ? new EventSource(`${base}/api/catalog/trips/${chuyenId}/seats/stream`) : null;
-    if (eventSource) {
+    void fetchMap().finally(() => {
+      if (active) setLoading(false);
+    });
+
+    pollTimer = window.setInterval(() => {
+      void fetchMap();
+    }, 2000);
+
+    const connectStream = () => {
+      const base = getApiBaseUrl();
+      if (!base || !active) return;
+      eventSource?.close();
+      eventSource = new EventSource(`${base}/api/catalog/trips/${chuyenId}/seats/stream`);
       eventSource.addEventListener('seats', (event) => {
         try {
           const parsed = JSON.parse(String(event.data)) as SeatMapResponse;
-          if (active) setMap(parsed);
+          if (active) syncMap(parsed, true);
         } catch {
           // ignore malformed SSE payload
         }
       });
       eventSource.onerror = () => {
-        eventSource.close();
+        eventSource?.close();
+        eventSource = null;
+        if (active) {
+          reconnectTimer = window.setTimeout(connectStream, 2000);
+        }
       };
-    }
+    };
+
+    connectStream();
 
     return () => {
       active = false;
+      if (reconnectTimer) window.clearTimeout(reconnectTimer);
+      if (pollTimer) window.clearInterval(pollTimer);
       eventSource?.close();
+      confirmedHoldsRef.current.clear();
       void api.post<ApiResponse<SeatMapResponse>>(`/api/catalog/trips/${chuyenId}/seats/release`, { holdToken });
     };
-  }, [chuyenId, holdToken]);
+  }, [chuyenId, holdToken, syncMap]);
 
   const holdSeat = useCallback(
     async (maGhe: string) => {
@@ -57,9 +102,10 @@ export function useRealtimeSeatMap(chuyenId?: number) {
         holdToken,
         maGhe,
       });
-      if (res.data?.data) setMap(res.data.data);
+      confirmedHoldsRef.current.add(maGhe);
+      if (res.data?.data) syncMap(res.data.data);
     },
-    [chuyenId, holdToken],
+    [chuyenId, holdToken, syncMap],
   );
 
   const releaseSeat = useCallback(
@@ -69,10 +115,13 @@ export function useRealtimeSeatMap(chuyenId?: number) {
         holdToken,
         maGhe,
       });
-      if (res.data?.data) setMap(res.data.data);
+      confirmedHoldsRef.current.delete(maGhe);
+      if (res.data?.data) syncMap(res.data.data);
     },
-    [chuyenId, holdToken],
+    [chuyenId, holdToken, syncMap],
   );
 
-  return { map, loading, holdToken, holdSeat, releaseSeat };
+  const isMyHeldSeat = useCallback((maGhe: string) => confirmedHoldsRef.current.has(maGhe), []);
+
+  return { map, loading, holdToken, holdSeat, releaseSeat, isMyHeldSeat, confirmedHoldsRef };
 }
