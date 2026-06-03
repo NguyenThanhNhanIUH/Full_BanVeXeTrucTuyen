@@ -16,6 +16,7 @@ export type SeatMapResponse = { tongSoGhe: number; ghe: SeatStatus[] };
 export type UiSeat = {
   maGhe: string;
   daBan: boolean;
+  dangGiuCho?: boolean;
   hienThiGhe?: string;
 };
 
