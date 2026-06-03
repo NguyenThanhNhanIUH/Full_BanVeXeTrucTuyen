@@ -22,7 +22,10 @@ import org.springframework.stereotype.Component;
 public class HcmCaMauDemoTripsRunner implements ApplicationRunner, Ordered {
 
     private static final Logger log = LoggerFactory.getLogger(HcmCaMauDemoTripsRunner.class);
-    private static final LocalDate DEMO_DATE = LocalDate.of(2026, 6, 5);
+    private static final List<LocalDate> DEMO_DATES = List.of(
+        LocalDate.of(2026, 6, 4),
+        LocalDate.of(2026, 6, 5)
+    );
 
     private final TuyenXeRepository tuyenXeRepository;
     private final XeRepository xeRepository;
@@ -60,19 +63,6 @@ public class HcmCaMauDemoTripsRunner implements ApplicationRunner, Ordered {
                 return;
             }
 
-            long existing = chuyenXeRepository.searchTrips(
-                com.banvexe.accountmanagement.entity.RouteStatus.ACTIVE,
-                TripRunStatus.CHUA_KHOI_HANH,
-                "%Hồ Chí Minh%",
-                "%Cà Mau%",
-                DEMO_DATE,
-                LocalDate.now().minusYears(1)
-            ).size();
-            if (existing > 0) {
-                log.info("Demo trips for {} on route #{} already exist ({} chuyến).", DEMO_DATE, route.getId(), existing);
-                return;
-            }
-
             List<Xe> vehicles = xeRepository.findAll();
             if (vehicles.isEmpty()) {
                 log.warn("Skip demo trips seed: no vehicles in DB.");
@@ -80,20 +70,36 @@ public class HcmCaMauDemoTripsRunner implements ApplicationRunner, Ordered {
             }
 
             BigDecimal giaVe = route.getGiaVeCoBan() != null ? route.getGiaVeCoBan() : BigDecimal.valueOf(220000);
-            int created = 0;
-            for (int hour = 0; hour < 24; hour++) {
-                Xe xe = vehicles.get(hour % vehicles.size());
-                ChuyenXe trip = new ChuyenXe();
-                trip.setTuyenXe(route);
-                trip.setXe(xe);
-                trip.setNgayDi(DEMO_DATE);
-                trip.setGioDi(LocalTime.of(hour, 0));
-                trip.setGiaVe(giaVe);
-                trip.setTrangThai(TripRunStatus.CHUA_KHOI_HANH);
-                chuyenXeRepository.save(trip);
-                created++;
+
+            for (LocalDate demoDate : DEMO_DATES) {
+                long existing = chuyenXeRepository.searchTrips(
+                    com.banvexe.accountmanagement.entity.RouteStatus.ACTIVE,
+                    TripRunStatus.CHUA_KHOI_HANH,
+                    "%Hồ Chí Minh%",
+                    "%Cà Mau%",
+                    demoDate,
+                    LocalDate.now().minusYears(1)
+                ).size();
+                if (existing > 0) {
+                    log.info("Demo trips for {} on route #{} already exist ({} chuyến).", demoDate, route.getId(), existing);
+                    continue;
+                }
+
+                int created = 0;
+                for (int hour = 0; hour < 24; hour++) {
+                    Xe xe = vehicles.get(hour % vehicles.size());
+                    ChuyenXe trip = new ChuyenXe();
+                    trip.setTuyenXe(route);
+                    trip.setXe(xe);
+                    trip.setNgayDi(demoDate);
+                    trip.setGioDi(LocalTime.of(hour, 0));
+                    trip.setGiaVe(giaVe);
+                    trip.setTrangThai(TripRunStatus.CHUA_KHOI_HANH);
+                    chuyenXeRepository.save(trip);
+                    created++;
+                }
+                log.info("Seeded {} demo trips TP.HCM -> Cà Mau on {} (route #{}).", created, demoDate, route.getId());
             }
-            log.info("Seeded {} demo trips TP.HCM -> Cà Mau on {} (route #{}).", created, DEMO_DATE, route.getId());
         } catch (Exception ex) {
             log.warn("Skip demo trips seed: {}", ex.getMessage());
         }
