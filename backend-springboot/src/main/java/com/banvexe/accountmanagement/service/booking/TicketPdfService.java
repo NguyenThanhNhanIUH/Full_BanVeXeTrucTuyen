@@ -3,7 +3,6 @@ package com.banvexe.accountmanagement.service.booking;
 import com.lowagie.text.Document;
 import com.lowagie.text.Element;
 import com.lowagie.text.Font;
-import com.lowagie.text.FontFactory;
 import com.lowagie.text.Image;
 import com.lowagie.text.Paragraph;
 import com.lowagie.text.Phrase;
@@ -37,13 +36,13 @@ public class TicketPdfService {
             PdfWriter.getInstance(document, out);
             document.open();
 
-            Font titleFont = FontFactory.getHelveticaBold(16);
-            Font labelFont = FontFactory.getHelveticaBold(10);
-            Font valueFont = FontFactory.getHelvetica(10);
-            Font smallFont = FontFactory.getHelvetica(9);
+            Font titleFont = new Font(Font.HELVETICA, 16, Font.BOLD);
+            Font labelFont = new Font(Font.HELVETICA, 10, Font.BOLD);
+            Font valueFont = new Font(Font.HELVETICA, 10, Font.NORMAL);
+            Font smallFont = new Font(Font.HELVETICA, 9, Font.NORMAL);
 
             document.add(new Paragraph(brandName == null || brandName.isBlank() ? "VinaGo" : brandName, titleFont));
-            document.add(new Paragraph("Vé điện tử", FontFactory.getHelvetica(12)));
+            document.add(new Paragraph("Vé điện tử", new Font(Font.HELVETICA, 12, Font.NORMAL)));
             document.add(new Paragraph("Khách: " + safe(customerName), valueFont));
             document.add(new Paragraph(" "));
 
