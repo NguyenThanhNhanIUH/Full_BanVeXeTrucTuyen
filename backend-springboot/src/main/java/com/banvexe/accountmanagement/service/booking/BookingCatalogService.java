@@ -117,6 +117,10 @@ public class BookingCatalogService {
     }
 
     public TripTrackingDto getTripTracking(Integer chuyenId) {
+        return getTripTracking(chuyenId, false);
+    }
+
+    public TripTrackingDto getTripTracking(Integer chuyenId, boolean forceDemo) {
         ChuyenXe c = chuyenXeRepository.findByIdWithDetails(chuyenId)
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Không tìm thấy chuyến xe"));
         TuyenXe t = c.getTuyenXe();
@@ -137,8 +141,14 @@ public class BookingCatalogService {
         double progress;
         String statusCode;
         String statusLabel;
+        boolean cheDoDemo = false;
 
-        if (runStatus == TripRunStatus.HUY_CHUYEN) {
+        if (forceDemo) {
+            progress = demoProgressSeconds();
+            statusCode = "DEMO";
+            statusLabel = "Demo hành trình";
+            cheDoDemo = true;
+        } else if (runStatus == TripRunStatus.HUY_CHUYEN) {
             progress = 0;
             statusCode = runStatus.name();
             statusLabel = "Chuyến đã hủy";
@@ -153,9 +163,10 @@ public class BookingCatalogService {
             statusCode = TripRunStatus.DANG_CHAY.name();
             statusLabel = "Đang trên đường";
         } else {
-            progress = 0;
-            statusCode = TripRunStatus.CHUA_KHOI_HANH.name();
-            statusLabel = "Chưa khởi hành";
+            progress = demoProgressSeconds();
+            statusCode = "DEMO";
+            statusLabel = "Demo hành trình (chưa tới giờ chạy)";
+            cheDoDemo = true;
         }
 
         double xeLat = origin.lat() + (dest.lat() - origin.lat()) * progress;
@@ -175,8 +186,16 @@ public class BookingCatalogService {
             xeLng,
             (int) Math.round(progress * 100),
             statusCode,
-            statusLabel
+            statusLabel,
+            cheDoDemo
         );
+    }
+
+    /** Vòng demo ~2 phút để thấy xe di chuyển trên map khi chưa tới giờ chạy thật. */
+    private static double demoProgressSeconds() {
+        long cycleSec = 120L;
+        long pos = (System.currentTimeMillis() / 1000) % cycleSec;
+        return pos / (double) cycleSec;
     }
 
     public SeatMapDto getSeatMap(Integer chuyenId) {

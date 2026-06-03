@@ -14,6 +14,7 @@ public record TripTrackingDto(
     double xeLng,
     int tienDoPhanTram,
     String trangThai,
-    String trangThaiHienThi
+    String trangThaiHienThi,
+    boolean cheDoDemo
 ) {
 }

@@ -83,8 +83,11 @@ public class BookingCatalogController {
     }
 
     @GetMapping("/trips/{id}/tracking")
-    public ResponseEntity<ApiResponse<TripTrackingDto>> tripTracking(@PathVariable Integer id) {
-        return ResponseEntity.ok(ApiResponse.success(bookingCatalogService.getTripTracking(id)));
+    public ResponseEntity<ApiResponse<TripTrackingDto>> tripTracking(
+        @PathVariable Integer id,
+        @RequestParam(required = false, defaultValue = "false") boolean demo
+    ) {
+        return ResponseEntity.ok(ApiResponse.success(bookingCatalogService.getTripTracking(id, demo)));
     }
 
     @GetMapping("/trips/{id}/seats")

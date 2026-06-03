@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { api } from '../../api/client';
@@ -18,6 +18,7 @@ export type TripTrackingData = {
   tienDoPhanTram: number;
   trangThai: string;
   trangThaiHienThi: string;
+  cheDoDemo?: boolean;
 };
 
 type ApiResponse<T> = { code: number; message: string; data: T };
@@ -52,34 +53,41 @@ const TripTrackingMap = ({ tripId, active }: TripTrackingMapProps) => {
   const [tracking, setTracking] = useState<TripTrackingData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [forceDemo, setForceDemo] = useState(false);
 
-  useEffect(() => {
-    if (!active) return;
-    let cancelled = false;
-
-    const fetchTracking = () =>
+  const fetchTracking = useCallback(
+    (demo = false) =>
       api
-        .get<ApiResponse<TripTrackingData>>(`/api/catalog/trips/${tripId}/tracking`)
+        .get<ApiResponse<TripTrackingData>>(`/api/catalog/trips/${tripId}/tracking`, { params: { demo } })
         .then((res) => {
-          if (!cancelled && res.data?.data) {
+          if (res.data?.data) {
             setTracking(res.data.data);
             setError('');
           }
         })
-        .catch(() => {
-          if (!cancelled) setError('Không tải được vị trí xe.');
-        })
-        .finally(() => {
-          if (!cancelled) setLoading(false);
-        });
+        .catch(() => setError('Không tải được vị trí xe.')),
+    [tripId],
+  );
 
-    void fetchTracking();
-    const timer = window.setInterval(fetchTracking, 15000);
+  useEffect(() => {
+    if (!active) return;
+    let cancelled = false;
+    setLoading(true);
+
+    void fetchTracking(forceDemo).finally(() => {
+      if (!cancelled) setLoading(false);
+    });
+
+    const intervalMs = forceDemo || tracking?.cheDoDemo ? 3000 : 15000;
+    const timer = window.setInterval(() => {
+      void fetchTracking(forceDemo);
+    }, intervalMs);
+
     return () => {
       cancelled = true;
       window.clearInterval(timer);
     };
-  }, [tripId, active]);
+  }, [tripId, active, forceDemo, fetchTracking, tracking?.cheDoDemo]);
 
   useEffect(() => {
     if (!active || !containerRef.current || !tracking) return;
@@ -166,10 +174,19 @@ const TripTrackingMap = ({ tripId, active }: TripTrackingMapProps) => {
     return <p className="text-sm text-gray-500">Chưa có dữ liệu theo dõi cho chuyến này.</p>;
   }
 
+  const isDemo = tracking.cheDoDemo || forceDemo;
+
   return (
     <div className="space-y-3">
+      {isDemo ? (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+          <strong>Chế độ demo:</strong> chuyến trong DB chưa tới giờ chạy thật — xe mô phỏng di chuyển trên tuyến (~2 phút/vòng) để bạn báo cáo thử nghiệm.
+        </div>
+      ) : null}
       <div className="flex flex-wrap items-center gap-2 text-sm">
-        <span className="rounded-full bg-blue-50 px-3 py-1 font-semibold text-blue-700">{tracking.trangThaiHienThi}</span>
+        <span className={`rounded-full px-3 py-1 font-semibold ${isDemo ? 'bg-amber-100 text-amber-800' : 'bg-blue-50 text-blue-700'}`}>
+          {tracking.trangThaiHienThi}
+        </span>
         <span className="text-gray-600">
           Tiến độ: <strong>{tracking.tienDoPhanTram}%</strong>
         </span>
@@ -183,10 +200,22 @@ const TripTrackingMap = ({ tripId, active }: TripTrackingMapProps) => {
             Loại xe: <strong>{tracking.loaiXe}</strong>
           </span>
         ) : null}
+        {!isDemo && tracking.trangThai === 'HOAN_THANH' ? (
+          <button
+            type="button"
+            onClick={() => setForceDemo(true)}
+            className="rounded-full border border-[#ef5222]/40 px-3 py-1 text-xs font-semibold text-[#ef5222] hover:bg-[#fff2ed]"
+          >
+            Phát lại demo
+          </button>
+        ) : null}
       </div>
       <div ref={containerRef} className="h-72 w-full overflow-hidden rounded-xl border border-gray-200 sm:h-80" />
       <p className="text-xs text-gray-500">
-        Vị trí xe được ước tính theo lịch chuyến và cập nhật mỗi 15 giây. Bản đồ OpenStreetMap — {tracking.diemDi} → {tracking.diemDen}.
+        {isDemo
+          ? 'Demo cập nhật mỗi 3 giây. Khi tới đúng ngày/giờ chạy thật, hệ thống tự chuyển sang theo dõi thực.'
+          : 'Vị trí ước tính theo lịch chuyến, cập nhật mỗi 15 giây.'}{' '}
+        {tracking.diemDi} → {tracking.diemDen}.
       </p>
     </div>
   );
