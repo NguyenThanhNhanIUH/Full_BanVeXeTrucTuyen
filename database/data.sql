@@ -71,7 +71,7 @@ CREATE TABLE VeXe (
     ngay_dat TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     so_luong_ghe INT NOT NULL,
     tong_tien DECIMAL(10,2) NOT NULL,
-    trang_thai ENUM('CHO_THANH_TOAN', 'DA_THANH_TOAN', 'DANG_XU_LY', 'DA_HUY', 'HOAN_THANH') DEFAULT 'CHO_THANH_TOAN',
+    trang_thai ENUM('CHO_THANH_TOAN', 'DAT_TRUOC', 'DA_THANH_TOAN', 'DANG_XU_LY', 'DA_HUY', 'HOAN_THANH') DEFAULT 'CHO_THANH_TOAN',
     ghi_chu TEXT,
     FOREIGN KEY (khach_hang_id) REFERENCES khach_hang(id),
     FOREIGN KEY (chuyen_xe_id) REFERENCES ChuyenXe(id)

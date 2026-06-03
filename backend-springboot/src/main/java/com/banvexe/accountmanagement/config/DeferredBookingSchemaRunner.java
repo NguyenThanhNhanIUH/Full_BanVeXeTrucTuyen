@@ -1,5 +1,6 @@
 package com.banvexe.accountmanagement.config;
 
+import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.ApplicationArguments;
@@ -27,7 +28,14 @@ public class DeferredBookingSchemaRunner implements ApplicationRunner, Ordered {
     @Override
     public void run(ApplicationArguments args) {
         try {
-            ensureColumn("vexe", "han_thanh_toan", "DATETIME(6) NULL");
+            String ticketTable = resolveTicketTableName();
+            if (ticketTable != null) {
+                ensureDatTruocTicketStatus(ticketTable);
+                ensureColumn(ticketTable, "han_thanh_toan", "DATETIME(6) NULL");
+            } else {
+                log.warn("Ticket table not found; skip deferred booking column migration.");
+            }
+
             jdbcTemplate.execute("""
                 CREATE TABLE IF NOT EXISTS thong_bao (
                     id BIGINT AUTO_INCREMENT PRIMARY KEY,
@@ -54,6 +62,43 @@ public class DeferredBookingSchemaRunner implements ApplicationRunner, Ordered {
         } catch (Exception ex) {
             log.warn("Skip deferred booking schema init: {}", ex.getMessage());
         }
+    }
+
+    private String resolveTicketTableName() {
+        for (String candidate : List.of("VeXe", "vexe", "VEXE")) {
+            Integer count = jdbcTemplate.queryForObject(
+                """
+                SELECT COUNT(*) FROM information_schema.TABLES
+                WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?
+                """,
+                Integer.class,
+                candidate
+            );
+            if (count != null && count > 0) {
+                return candidate;
+            }
+        }
+        return null;
+    }
+
+    private void ensureDatTruocTicketStatus(String table) {
+        String columnType = jdbcTemplate.queryForObject(
+            """
+            SELECT COLUMN_TYPE FROM information_schema.COLUMNS
+            WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = 'trang_thai'
+            """,
+            String.class,
+            table
+        );
+        if (columnType != null && columnType.contains("DAT_TRUOC")) {
+            return;
+        }
+        jdbcTemplate.execute(
+            "ALTER TABLE " + table + " MODIFY COLUMN trang_thai ENUM("
+                + "'CHO_THANH_TOAN', 'DAT_TRUOC', 'DA_THANH_TOAN', 'DANG_XU_LY', 'DA_HUY', 'HOAN_THANH'"
+                + ") DEFAULT 'CHO_THANH_TOAN'"
+        );
+        log.info("Added DAT_TRUOC to {}.trang_thai enum.", table);
     }
 
     private void ensureColumn(String table, String column, String ddl) {
