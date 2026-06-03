@@ -16,6 +16,8 @@ public interface GiuGheTamRepository extends JpaRepository<GiuGheTam, Long> {
 
     List<GiuGheTam> findByChuyenXeIdAndExpiresAtAfter(Integer chuyenXeId, Instant now);
 
+    List<GiuGheTam> findByHoldTokenAndChuyenXeIdAndExpiresAtAfter(String holdToken, Integer chuyenXeId, Instant now);
+
     long countByHoldTokenAndChuyenXeIdAndExpiresAtAfter(String holdToken, Integer chuyenXeId, Instant now);
 
     @Modifying(flushAutomatically = true, clearAutomatically = true)

@@ -82,8 +82,11 @@ public class BookingCatalogController {
     }
 
     @GetMapping("/trips/{id}/seats")
-    public ResponseEntity<ApiResponse<SeatMapDto>> seatMap(@PathVariable Integer id) {
-        return ResponseEntity.ok(ApiResponse.success(bookingCatalogService.getSeatMap(id)));
+    public ResponseEntity<ApiResponse<SeatMapDto>> seatMap(
+        @PathVariable Integer id,
+        @RequestParam(required = false) String holdToken
+    ) {
+        return ResponseEntity.ok(ApiResponse.success(bookingCatalogService.getSeatMap(id, holdToken)));
     }
 
     @GetMapping(value = "/trips/{id}/seats/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
@@ -103,7 +106,7 @@ public class BookingCatalogController {
         @Validated @RequestBody SeatHoldRequest request
     ) {
         seatSelectionHoldService.holdSeat(id, request.holdToken(), request.maGhe());
-        return ResponseEntity.ok(ApiResponse.success(bookingCatalogService.getSeatMap(id)));
+        return ResponseEntity.ok(ApiResponse.success(bookingCatalogService.getSeatMap(id, request.holdToken())));
     }
 
     @PostMapping("/trips/{id}/seats/release")
@@ -116,6 +119,6 @@ public class BookingCatalogController {
         } else {
             seatSelectionHoldService.releaseAll(id, request.holdToken());
         }
-        return ResponseEntity.ok(ApiResponse.success(bookingCatalogService.getSeatMap(id)));
+        return ResponseEntity.ok(ApiResponse.success(bookingCatalogService.getSeatMap(id, request.holdToken())));
     }
 }

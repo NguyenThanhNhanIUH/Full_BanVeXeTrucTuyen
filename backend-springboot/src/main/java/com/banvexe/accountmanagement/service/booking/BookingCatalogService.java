@@ -113,6 +113,10 @@ public class BookingCatalogService {
     }
 
     public SeatMapDto getSeatMap(Integer chuyenId) {
+        return getSeatMap(chuyenId, null);
+    }
+
+    public SeatMapDto getSeatMap(Integer chuyenId, String holdToken) {
         ChuyenXe c = chuyenXeRepository.findByIdWithDetails(chuyenId)
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Không tìm thấy chuyến xe"));
         int soGhe = safeTongGhe(c);
@@ -122,11 +126,16 @@ public class BookingCatalogService {
                 "Chuyến #" + c.getId() + ": xe không hợp lệ (thiếu hoặc số ghế = 0). Kiểm tra bảng Xe.chuyen_xe."
             );
         }
+        Set<String> myTemporaryHolds = resolveMyTemporaryHolds(c.getId(), holdToken);
         Set<String> held = new HashSet<>(
             chiTietVeRepository.findOccupiedSeatCodes(c.getId(), List.of(TicketStatus.CHO_THANH_TOAN))
         );
         giuGheTamRepository.findByChuyenXeIdAndExpiresAtAfter(c.getId(), Instant.now())
-            .forEach(h -> held.add(h.getSoGhe()));
+            .forEach(h -> {
+                if (!myTemporaryHolds.contains(h.getSoGhe())) {
+                    held.add(h.getSoGhe());
+                }
+            });
         Set<String> sold = new HashSet<>(
             chiTietVeRepository.findOccupiedSeatCodes(
                 c.getId(),
@@ -137,7 +146,29 @@ public class BookingCatalogService {
         List<SeatStatusDto> seats = labels.stream()
             .map(l -> new SeatStatusDto(l, sold.contains(l), held.contains(l)))
             .toList();
-        return new SeatMapDto(soGhe, seats);
+        return new SeatMapDto(soGhe, seats, myTemporaryHolds.stream().sorted().toList());
+    }
+
+    private Set<String> resolveMyTemporaryHolds(Integer chuyenId, String holdToken) {
+        String normalized = normalizeHoldToken(holdToken);
+        if (normalized == null) {
+            return Set.of();
+        }
+        Set<String> mine = new HashSet<>();
+        giuGheTamRepository.findByHoldTokenAndChuyenXeIdAndExpiresAtAfter(normalized, chuyenId, Instant.now())
+            .forEach(h -> mine.add(h.getSoGhe()));
+        return mine;
+    }
+
+    private String normalizeHoldToken(String holdToken) {
+        if (holdToken == null) {
+            return null;
+        }
+        String token = holdToken.trim().toLowerCase(java.util.Locale.ROOT);
+        if (token.length() < 8 || token.length() > 64) {
+            return null;
+        }
+        return token;
     }
 
     public int countAvailableSeats(ChuyenXe c) {

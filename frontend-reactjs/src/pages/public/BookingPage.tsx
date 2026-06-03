@@ -168,6 +168,18 @@ const BookingPage = () => {
     return () => window.removeEventListener('banvexe:seat-lost', handler);
   }, [outboundTrip?.id, returnTrip?.id]);
 
+  useEffect(() => {
+    if (outboundSeatMap.myHeldSeats.length) {
+      setSelectedOutboundSeats(outboundSeatMap.myHeldSeats);
+    }
+  }, [outboundSeatMap.myHeldSeats]);
+
+  useEffect(() => {
+    if (returnSeatMap.myHeldSeats.length) {
+      setSelectedReturnSeats(returnSeatMap.myHeldSeats);
+    }
+  }, [returnSeatMap.myHeldSeats]);
+
   const totalOutbound = (selectedOutboundSeats.length || 0) * Number(outboundTrip?.giaVe || 0);
   const totalReturn = (selectedReturnSeats.length || 0) * Number(returnTrip?.giaVe || 0);
   const totalAmount = totalOutbound + totalReturn;

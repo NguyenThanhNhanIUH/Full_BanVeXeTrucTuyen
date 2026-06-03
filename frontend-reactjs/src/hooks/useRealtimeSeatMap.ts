@@ -21,22 +21,39 @@ const applyMapUpdate = (
   }
 };
 
+const restoreMyHolds = (map: SeatMapResponse, confirmedHolds: Set<string>) => {
+  const mine = map.maGheCuaBan ?? [];
+  mine.forEach((seatCode) => confirmedHolds.add(seatCode));
+  return mine;
+};
+
 export function useRealtimeSeatMap(chuyenId?: number) {
   const [map, setMap] = useState<SeatMapResponse | null>(null);
   const [loading, setLoading] = useState(Boolean(chuyenId));
+  const [myHeldSeats, setMyHeldSeats] = useState<string[]>([]);
   const confirmedHoldsRef = useRef<Set<string>>(new Set());
   const holdToken = useMemo(() => (chuyenId ? getSeatHoldToken(chuyenId) : ''), [chuyenId]);
 
-  const syncMap = useCallback((nextMap: SeatMapResponse, notifyConflict = false) => {
-    if (notifyConflict) {
-      applyMapUpdate(nextMap, confirmedHoldsRef.current, (seatCode) => {
-        if (typeof window !== 'undefined') {
-          window.dispatchEvent(new CustomEvent('banvexe:seat-lost', { detail: { chuyenId, seatCode } }));
-        }
-      });
-    }
-    setMap(nextMap);
-  }, [chuyenId]);
+  const syncMap = useCallback(
+    (nextMap: SeatMapResponse, notifyConflict = false, restoreMine = false) => {
+      if (restoreMine) {
+        const mine = restoreMyHolds(nextMap, confirmedHoldsRef.current);
+        setMyHeldSeats(mine);
+      } else if (nextMap.maGheCuaBan?.length) {
+        nextMap.maGheCuaBan.forEach((seatCode) => confirmedHoldsRef.current.add(seatCode));
+        setMyHeldSeats((prev) => [...new Set([...prev, ...nextMap.maGheCuaBan!])]);
+      }
+      if (notifyConflict) {
+        applyMapUpdate(nextMap, confirmedHoldsRef.current, (seatCode) => {
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('banvexe:seat-lost', { detail: { chuyenId, seatCode } }));
+          }
+        });
+      }
+      setMap(nextMap);
+    },
+    [chuyenId],
+  );
 
   useEffect(() => {
     if (!chuyenId) return;
@@ -45,20 +62,25 @@ export function useRealtimeSeatMap(chuyenId?: number) {
     let reconnectTimer: number | undefined;
     let pollTimer: number | undefined;
 
-    const fetchMap = () =>
+    confirmedHoldsRef.current.clear();
+    setMyHeldSeats([]);
+
+    const fetchMap = (restoreMine = false) =>
       api
-        .get<ApiResponse<SeatMapResponse>>(`/api/catalog/trips/${chuyenId}/seats`)
+        .get<ApiResponse<SeatMapResponse>>(`/api/catalog/trips/${chuyenId}/seats`, {
+          params: { holdToken },
+        })
         .then((res) => {
-          if (active && res.data?.data) syncMap(res.data.data, true);
+          if (active && res.data?.data) syncMap(res.data.data, !restoreMine, restoreMine);
         })
         .catch(() => undefined);
 
-    void fetchMap().finally(() => {
+    void fetchMap(true).finally(() => {
       if (active) setLoading(false);
     });
 
     pollTimer = window.setInterval(() => {
-      void fetchMap();
+      void fetchMap(false);
     }, 2000);
 
     const connectStream = () => {
@@ -69,7 +91,7 @@ export function useRealtimeSeatMap(chuyenId?: number) {
       eventSource.addEventListener('seats', (event) => {
         try {
           const parsed = JSON.parse(String(event.data)) as SeatMapResponse;
-          if (active) syncMap(parsed, true);
+          if (active) syncMap(parsed, true, false);
         } catch {
           // ignore malformed SSE payload
         }
@@ -90,8 +112,6 @@ export function useRealtimeSeatMap(chuyenId?: number) {
       if (reconnectTimer) window.clearTimeout(reconnectTimer);
       if (pollTimer) window.clearInterval(pollTimer);
       eventSource?.close();
-      confirmedHoldsRef.current.clear();
-      void api.post<ApiResponse<SeatMapResponse>>(`/api/catalog/trips/${chuyenId}/seats/release`, { holdToken });
     };
   }, [chuyenId, holdToken, syncMap]);
 
@@ -103,6 +123,7 @@ export function useRealtimeSeatMap(chuyenId?: number) {
         maGhe,
       });
       confirmedHoldsRef.current.add(maGhe);
+      setMyHeldSeats((prev) => [...new Set([...prev, maGhe])]);
       if (res.data?.data) syncMap(res.data.data);
     },
     [chuyenId, holdToken, syncMap],
@@ -116,12 +137,11 @@ export function useRealtimeSeatMap(chuyenId?: number) {
         maGhe,
       });
       confirmedHoldsRef.current.delete(maGhe);
+      setMyHeldSeats((prev) => prev.filter((s) => s !== maGhe));
       if (res.data?.data) syncMap(res.data.data);
     },
     [chuyenId, holdToken, syncMap],
   );
 
-  const isMyHeldSeat = useCallback((maGhe: string) => confirmedHoldsRef.current.has(maGhe), []);
-
-  return { map, loading, holdToken, holdSeat, releaseSeat, isMyHeldSeat, confirmedHoldsRef };
-}
+  return { map, loading, holdToken, holdSeat, releaseSeat, myHeldSeats, confirmedHoldsRef };
+};

@@ -82,6 +82,17 @@ const HomePage = () => {
   const [soDoGheTheoChuyen, setSoDoGheTheoChuyen] = useState<Record<number, SeatMapResponse>>({});
   const [gheDangChonTheoChuyen, setGheDangChonTheoChuyen] = useState<Record<number, string[]>>({});
   const confirmedHoldsRef = useRef<Record<number, Set<string>>>({});
+  const applySeatMapForTrip = useCallback((tripId: number, seatMap: SeatMapResponse) => {
+    setSoDoGheTheoChuyen((prev) => ({ ...prev, [tripId]: seatMap }));
+    const mine = seatMap.maGheCuaBan ?? [];
+    if (!mine.length) return;
+    if (!confirmedHoldsRef.current[tripId]) confirmedHoldsRef.current[tripId] = new Set();
+    mine.forEach((code) => confirmedHoldsRef.current[tripId]!.add(code));
+    setGheDangChonTheoChuyen((prev) => ({
+      ...prev,
+      [tripId]: [...new Set([...(prev[tripId] ?? []), ...mine])],
+    }));
+  }, []);
   const [routeDurationCache, setRouteDurationCache] = useState<Record<string, number>>({});
 
   useEffect(() => {
@@ -262,11 +273,13 @@ const HomePage = () => {
     if (soDoGheTheoChuyen[tripId]) return;
     setDangTaiSoDoGhe(true);
     try {
-      const { data } = await api.get<{ data?: SeatMapResponse }>(`/api/catalog/trips/${tripId}/seats`);
+      const holdToken = getSeatHoldToken(tripId);
+      const { data } = await api.get<{ data?: SeatMapResponse }>(`/api/catalog/trips/${tripId}/seats`, {
+        params: { holdToken },
+      });
       const seatMap = data?.data;
       if (!seatMap) return;
-      setSoDoGheTheoChuyen((prev) => ({ ...prev, [tripId]: seatMap }));
-      setGheDangChonTheoChuyen((prev) => ({ ...prev, [tripId]: prev[tripId] ?? [] }));
+      applySeatMapForTrip(tripId, seatMap);
     } catch {
       window.alert('Không thể tải sơ đồ ghế của chuyến này.');
     } finally {
@@ -457,12 +470,13 @@ const HomePage = () => {
 
     if (!soDoGheTheoChuyen[restoredTrip.id]) {
       setDangTaiSoDoGhe(true);
+      const holdToken = getSeatHoldToken(restoredTrip.id);
       api
-        .get<{ data?: SeatMapResponse }>(`/api/catalog/trips/${restoredTrip.id}/seats`)
+        .get<{ data?: SeatMapResponse }>(`/api/catalog/trips/${restoredTrip.id}/seats`, { params: { holdToken } })
         .then((res) => {
           const seatMap = res.data?.data;
           if (!seatMap) return;
-          setSoDoGheTheoChuyen((prev) => ({ ...prev, [restoredTrip.id]: seatMap }));
+          applySeatMapForTrip(restoredTrip.id, seatMap);
         })
         .catch(() => {
           window.alert('Không thể tải lại sơ đồ ghế của chuyến đã chọn.');
@@ -620,21 +634,18 @@ const HomePage = () => {
     let cancelled = false;
     void (async () => {
       const results = await Promise.all(
-        missing.map((t) =>
-          api
-            .get<{ data?: SeatMapResponse }>(`/api/catalog/trips/${t.id}/seats`)
+        missing.map((t) => {
+          const holdToken = getSeatHoldToken(t.id);
+          return api
+            .get<{ data?: SeatMapResponse }>(`/api/catalog/trips/${t.id}/seats`, { params: { holdToken } })
             .then((r) => ({ id: t.id, map: r.data?.data as SeatMapResponse | undefined }))
-            .catch(() => ({ id: t.id, map: undefined })),
-        ),
+            .catch(() => ({ id: t.id, map: undefined }));
+        }),
       );
       if (cancelled) return;
-      setSoDoGheTheoChuyen((prev) => {
-        const next = { ...prev };
-        for (const { id, map } of results) {
-          if (map) next[id] = map;
-        }
-        return next;
-      });
+      for (const { id, map } of results) {
+        if (map) applySeatMapForTrip(id, map);
+      }
     })();
     return () => {
       cancelled = true;

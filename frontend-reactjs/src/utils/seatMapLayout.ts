@@ -19,7 +19,7 @@ export function isSeatUnavailable(
 }
 
 /** API GET /api/catalog/trips/{id}/seats */
-export type SeatMapResponse = { tongSoGhe: number; ghe: SeatStatus[] };
+export type SeatMapResponse = { tongSoGhe: number; ghe: SeatStatus[]; maGheCuaBan?: string[] };
 
 export type UiSeat = {
   maGhe: string;
