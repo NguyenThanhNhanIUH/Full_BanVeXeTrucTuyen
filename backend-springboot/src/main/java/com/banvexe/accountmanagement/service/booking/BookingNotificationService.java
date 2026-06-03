@@ -8,7 +8,10 @@ import com.banvexe.accountmanagement.repository.VeXeRepository;
 import java.io.IOException;
 import java.math.BigDecimal;
 import java.net.URI;
+import java.net.URLEncoder;
 import java.net.http.HttpClient;
+import java.nio.charset.StandardCharsets;
+import java.util.Base64;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.text.NumberFormat;
@@ -40,6 +43,8 @@ public class BookingNotificationService {
     private final JavaMailSender mailSender;
     private final VeXeRepository veXeRepository;
     private final ChiTietVeRepository chiTietVeRepository;
+    private final TicketPdfService ticketPdfService;
+    private final QrCodeGenerator qrCodeGenerator;
     private final String fromEmail;
     private final String brandName;
     private final String logoUrl;
@@ -60,6 +65,8 @@ public class BookingNotificationService {
         JavaMailSender mailSender,
         VeXeRepository veXeRepository,
         ChiTietVeRepository chiTietVeRepository,
+        TicketPdfService ticketPdfService,
+        QrCodeGenerator qrCodeGenerator,
         @Value("${spring.mail.username:no-reply@banvexe.local}") String fromEmail,
         @Value("${app.mail.from-name:BanVeXe}") String fromName,
         @Value("${app.mail.mailjet.api-key:}") String mailjetApiKey,
@@ -78,6 +85,8 @@ public class BookingNotificationService {
         this.mailSender = mailSender;
         this.veXeRepository = veXeRepository;
         this.chiTietVeRepository = chiTietVeRepository;
+        this.ticketPdfService = ticketPdfService;
+        this.qrCodeGenerator = qrCodeGenerator;
         this.fromEmail = fromEmail;
         this.brandName = brandName;
         this.logoUrl = logoUrl;
@@ -102,7 +111,7 @@ public class BookingNotificationService {
         BigDecimal total = rows.stream().map(TicketEmailRow::tongTien).reduce(BigDecimal.ZERO, BigDecimal::add);
         String subject = "[BanVeXe] Xác nhận đặt vé thành công - " + safe(ticket.getMaVe());
         String body = buildBookingSuccessHtml(fullName, rows, total);
-        sendSafe(toEmail, subject, body);
+        sendTicketNotification(toEmail, fullName, subject, body, rows);
     }
 
     public void sendDeferredBookingSuccess(KhachHang khach, VeXe ticket, Instant hanThanhToan) {
@@ -114,7 +123,7 @@ public class BookingNotificationService {
         String deadline = hanThanhToan != null ? INSTANT_FMT.format(hanThanhToan) : "—";
         String subject = "[BanVeXe] Đặt trước thành công - " + safe(ticket.getMaVe());
         String body = buildDeferredBookingHtml(fullName, rows, total, deadline);
-        sendSafe(toEmail, subject, body);
+        sendTicketNotification(toEmail, fullName, subject, body, rows);
     }
 
     public void sendPaymentReminder(KhachHang khach, VeXe ticket, long daysLeft) {
@@ -137,7 +146,143 @@ public class BookingNotificationService {
 
         String subject = "[BanVeXe] Xác nhận thanh toán thành công";
         String body = buildPaymentSuccessHtml(fullName, rows, paymentRef, total);
-        sendSafe(toEmail, subject, body);
+        sendTicketNotification(toEmail, fullName, subject, body, rows);
+    }
+
+    private void sendTicketNotification(
+        String toEmail,
+        String fullName,
+        String subject,
+        String htmlBody,
+        List<TicketEmailRow> rows
+    ) {
+        if (!isValidEmail(toEmail) || rows == null || rows.isEmpty()) {
+            return;
+        }
+        String primaryMaVe = rows.get(0).maVe();
+        String lookupUrl = buildTicketLookupUrl(primaryMaVe);
+        String qrDataUri = qrCodeGenerator.toDataUri(lookupUrl, 200);
+        String enrichedBody = htmlBody + qrEmailBlock(qrDataUri, lookupUrl, primaryMaVe);
+        List<TicketPdfService.TicketPdfRow> pdfRows = rows.stream().map(this::toPdfRow).toList();
+        byte[] pdfBytes = ticketPdfService.buildTicketPdf(brandName, fullName, pdfRows, lookupUrl);
+        String pdfName = "ve-" + sanitizeFileName(primaryMaVe) + ".pdf";
+        sendSafeWithOptionalPdf(toEmail, subject, enrichedBody, pdfBytes, pdfName);
+    }
+
+    private TicketPdfService.TicketPdfRow toPdfRow(TicketEmailRow row) {
+        return new TicketPdfService.TicketPdfRow(
+            row.maVe(),
+            row.trangThai(),
+            row.tenTuyen(),
+            row.diemDi(),
+            row.diemDen(),
+            row.ngayDi(),
+            row.gioDi(),
+            row.ghe(),
+            row.tongTien()
+        );
+    }
+
+    private String buildTicketLookupUrl(String maVe) {
+        String base = ticketLookupUrl != null && !ticketLookupUrl.isBlank()
+            ? ticketLookupUrl.trim()
+            : websiteUrl + "/tra-cuu-ve";
+        String encoded = URLEncoder.encode(maVe == null ? "" : maVe.trim(), StandardCharsets.UTF_8);
+        return base + (base.contains("?") ? "&" : "?") + "maVe=" + encoded;
+    }
+
+    private String qrEmailBlock(String qrDataUri, String lookupUrl, String maVe) {
+        if (qrDataUri == null || qrDataUri.isBlank()) {
+            return """
+                <div style="margin:20px 0;padding:12px;border:1px dashed #d1d5db;border-radius:10px;text-align:center;">
+                  <p style="margin:0;font-size:13px;">Tra cứu vé: <a href="%s">%s</a></p>
+                </div>
+                """.formatted(safeUrl(lookupUrl), safe(maVe));
+        }
+        return """
+            <div style="margin:20px 0;padding:16px;border:1px dashed #d1d5db;border-radius:12px;text-align:center;background:#f9fafb;">
+              <p style="margin:0 0 10px;font-size:14px;font-weight:bold;">Quét QR để tra cứu vé</p>
+              <img src="%s" alt="QR %s" width="160" height="160" style="border:1px solid #e5e7eb;border-radius:8px;" />
+              <p style="margin:10px 0 0;font-size:12px;color:#6b7280;">Mã vé: <strong>%s</strong> · <a href="%s">Mở tra cứu</a></p>
+              <p style="margin:6px 0 0;font-size:11px;color:#9ca3af;">File PDF vé đính kèm email này.</p>
+            </div>
+            """.formatted(qrDataUri, safe(maVe), safe(maVe), safeUrl(lookupUrl));
+    }
+
+    private String sanitizeFileName(String maVe) {
+        if (maVe == null || maVe.isBlank()) {
+            return "banvexe";
+        }
+        return maVe.trim().replaceAll("[^a-zA-Z0-9._-]", "_");
+    }
+
+    @SuppressWarnings("null")
+    private void sendSafeWithOptionalPdf(String to, String subject, String htmlBody, byte[] pdfBytes, String pdfName) {
+        if (pdfBytes != null && pdfBytes.length > 0) {
+            sendSafeWithPdf(to, subject, htmlBody, pdfBytes, pdfName);
+            return;
+        }
+        sendSafe(to, subject, htmlBody);
+    }
+
+    @SuppressWarnings("null")
+    private void sendSafeWithPdf(String to, String subject, String htmlBody, byte[] pdfBytes, String pdfName) {
+        try {
+            String from = fromEmail == null || fromEmail.isBlank() ? "no-reply@banvexe.local" : fromEmail;
+            String mailTo = to == null ? "" : to;
+            String mailSubject = subject == null ? "" : subject;
+            String mailBody = htmlBody == null ? "" : htmlBody;
+            if (isMailjetApiConfigured()) {
+                sendViaMailjetApiWithPdf(from, mailTo, mailSubject, mailBody, pdfBytes, pdfName);
+                return;
+            }
+            MimeMessage message = mailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
+            helper.setFrom(from);
+            helper.setTo(mailTo);
+            helper.setSubject(mailSubject);
+            helper.setText(mailBody, true);
+            helper.addAttachment(pdfName, () -> new java.io.ByteArrayInputStream(pdfBytes), "application/pdf");
+            mailSender.send(message);
+        } catch (Exception ex) {
+            log.warn("Khong gui duoc email kem PDF toi {}: {}", to, ex.getMessage());
+            sendSafe(to, subject, htmlBody);
+        }
+    }
+
+    private void sendViaMailjetApiWithPdf(
+        String from,
+        String to,
+        String subject,
+        String htmlBody,
+        byte[] pdfBytes,
+        String pdfName
+    ) throws IOException, InterruptedException {
+        String pdfBase64 = Base64.getEncoder().encodeToString(pdfBytes);
+        String jsonBody = "{"
+            + "\"Messages\":[{"
+            + "\"From\":{\"Email\":\"" + jsonEscape(from) + "\",\"Name\":\"" + jsonEscape(fromName) + "\"},"
+            + "\"To\":[{\"Email\":\"" + jsonEscape(to) + "\"}],"
+            + "\"Subject\":\"" + jsonEscape(subject) + "\","
+            + "\"HTMLPart\":\"" + jsonEscape(htmlBody) + "\","
+            + "\"Attachments\":[{\"ContentType\":\"application/pdf\",\"Filename\":\"" + jsonEscape(pdfName) + "\",\"Base64Content\":\"" + pdfBase64 + "\"}]"
+            + "}]"
+            + "}";
+
+        String authToken = Base64.getEncoder()
+            .encodeToString((mailjetApiKey + ":" + mailjetSecretKey).getBytes(StandardCharsets.UTF_8));
+
+        HttpRequest request = HttpRequest.newBuilder()
+            .uri(URI.create("https://api.mailjet.com/v3.1/send"))
+            .header("Content-Type", "application/json")
+            .header("Authorization", "Basic " + authToken)
+            .POST(HttpRequest.BodyPublishers.ofString(jsonBody))
+            .build();
+
+        HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+        if (response.statusCode() < 200 || response.statusCode() >= 300) {
+            throw new IOException("Mailjet API error " + response.statusCode() + ": " + response.body());
+        }
     }
 
     @SuppressWarnings("null")

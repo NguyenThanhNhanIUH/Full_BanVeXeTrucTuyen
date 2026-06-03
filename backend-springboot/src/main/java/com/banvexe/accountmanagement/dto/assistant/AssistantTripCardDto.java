@@ -1,6 +1,7 @@
 package com.banvexe.accountmanagement.dto.assistant;
 
 import java.math.BigDecimal;
+import java.util.List;
 
 public record AssistantTripCardDto(
     Integer id,
@@ -15,6 +16,7 @@ public record AssistantTripCardDto(
     String loaiXe,
     String bienSo,
     int soGheTrong,
-    String subtitle
+    String subtitle,
+    List<String> availableSeats
 ) {
 }

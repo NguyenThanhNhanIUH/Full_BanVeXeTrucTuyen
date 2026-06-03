@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { RefreshCw, Layers, Clock, CheckCircle2, Loader2, Ban, Pencil, Search } from 'lucide-react';
+import { RefreshCw, Layers, Clock, CheckCircle2, Loader2, Ban, Pencil, Search, CalendarClock } from 'lucide-react';
 import { api } from '../../api/client';
 import { getStoredRole } from '../../auth/storage';
 import AdminPageStats from '../../components/admin/AdminPageStats';
@@ -45,6 +45,7 @@ const TicketManagement: React.FC = () => {
   const [ticketStats, setTicketStats] = useState({
     total: 0,
     choThanhToan: 0,
+    datTruoc: 0,
     daThanhToan: 0,
     dangXuLy: 0,
     daHuy: 0,
@@ -62,6 +63,7 @@ const TicketManagement: React.FC = () => {
         setTicketStats({
           total: Number(s.total) || 0,
           choThanhToan: Number(s.choThanhToan) || 0,
+          datTruoc: Number(s.datTruoc) || 0,
           daThanhToan: Number(s.daThanhToan) || 0,
           dangXuLy: Number(s.dangXuLy) || 0,
           daHuy: Number(s.daHuy) || 0,
@@ -319,7 +321,7 @@ const TicketManagement: React.FC = () => {
       <AdminPageStats
         title="Thống kê vé toàn hệ thống"
         loading={statsLoading}
-        gridClassName="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-4 mb-2"
+        gridClassName="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4 mb-2"
         activeActionKey={status}
         onItemClick={(key) => {
           setPage(0);
@@ -328,6 +330,7 @@ const TicketManagement: React.FC = () => {
         items={[
           { label: 'Tổng vé', value: ticketStats.total, icon: <Layers size={22} />, color: 'text-violet-600', bg: 'bg-violet-50', border: 'border-violet-200', actionKey: 'ALL' },
           { label: STATUS_LABEL.CHO_THANH_TOAN, value: ticketStats.choThanhToan, icon: <Clock size={22} />, color: 'text-amber-600', bg: 'bg-amber-50', border: 'border-amber-200', actionKey: 'CHO_THANH_TOAN' },
+          { label: STATUS_LABEL.DAT_TRUOC, value: ticketStats.datTruoc, icon: <CalendarClock size={22} />, color: 'text-orange-600', bg: 'bg-orange-50', border: 'border-orange-200', actionKey: 'DAT_TRUOC' },
           { label: STATUS_LABEL.DA_THANH_TOAN, value: ticketStats.daThanhToan, icon: <CheckCircle2 size={22} />, color: 'text-emerald-600', bg: 'bg-emerald-50', border: 'border-emerald-200', actionKey: 'DA_THANH_TOAN' },
           { label: STATUS_LABEL.DANG_XU_LY, value: ticketStats.dangXuLy, icon: <Loader2 size={22} />, color: 'text-sky-600', bg: 'bg-sky-50', border: 'border-sky-200', actionKey: 'DANG_XU_LY' },
           { label: STATUS_LABEL.DA_HUY, value: ticketStats.daHuy, icon: <Ban size={22} />, color: 'text-rose-600', bg: 'bg-rose-50', border: 'border-rose-200', actionKey: 'DA_HUY' },

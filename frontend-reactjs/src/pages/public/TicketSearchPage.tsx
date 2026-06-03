@@ -141,6 +141,14 @@ const TicketSearchPage = () => {
   const onSearchTicket = () => runTicketLookup(phone, ticketCode);
 
   useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const maVeFromUrl = params.get('maVe')?.trim();
+    if (maVeFromUrl) {
+      setTicketCode(maVeFromUrl);
+    }
+  }, [location.search]);
+
+  useEffect(() => {
     if (autoLookupAfterPaymentRef.current) return;
     const p = prefilledPhoneFromNav;
     const code = highlightedCodes[0]?.trim();

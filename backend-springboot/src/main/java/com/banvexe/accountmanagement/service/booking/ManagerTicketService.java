@@ -66,11 +66,12 @@ public class ManagerTicketService {
     public ManagerTicketStatsDto getTicketStats() {
         long total = veXeRepository.count();
         long c1 = veXeRepository.countByTrangThai(TicketStatus.CHO_THANH_TOAN);
+        long cDatTruoc = veXeRepository.countByTrangThai(TicketStatus.DAT_TRUOC);
         long c2 = veXeRepository.countByTrangThai(TicketStatus.DA_THANH_TOAN);
         long c3 = veXeRepository.countByTrangThai(TicketStatus.DANG_XU_LY);
         long c4 = veXeRepository.countByTrangThai(TicketStatus.DA_HUY);
         long c5 = veXeRepository.countByTrangThai(TicketStatus.HOAN_THANH);
-        return new ManagerTicketStatsDto(total, c1, c2, c3, c4, c5);
+        return new ManagerTicketStatsDto(total, c1, cDatTruoc, c2, c3, c4, c5);
     }
 
     @Transactional(readOnly = true)

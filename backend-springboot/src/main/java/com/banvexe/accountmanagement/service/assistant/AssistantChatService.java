@@ -191,7 +191,7 @@ public class AssistantChatService {
         List<AssistantTripCardDto> cards = toTripCards(trips, 6);
         return new AssistantChatResponse(
             "Có " + trips.size() + " chuyến " + origin + " → " + destination + " " + whenText
-                + ". Bấm chuyến bên dưới để chọn ghế và đặt vé:",
+                + ". Bấm chuyến bên dưới để chọn ghế — mỗi thẻ có gợi ý ghế trống:",
             List.of(
                 origin + " → " + destination + " khứ hồi",
                 "Cách đặt trước — thanh toán sau?",
@@ -240,7 +240,8 @@ public class AssistantChatService {
                 c.loaiXe(),
                 c.bienSo(),
                 c.soGheTrong(),
-                c.subtitle()
+                c.subtitle(),
+                c.availableSeats()
             ))
             .toList());
 
@@ -268,13 +269,16 @@ public class AssistantChatService {
     }
 
     private AssistantTripCardDto toTripCard(TripSummaryDto t) {
+        List<String> availableSeats = listAvailableSeats(t.id(), 5);
         StringBuilder subtitle = new StringBuilder();
         subtitle.append(formatDate(t.ngayDi())).append(" · ").append(formatTime(t.gioDi()));
         subtitle.append(" · ").append(formatCurrency(t.giaVe()));
         if (t.loaiXe() != null && !t.loaiXe().isBlank()) {
             subtitle.append(" · ").append(t.loaiXe().trim());
         }
-        if (t.soGheTrong() > 0) {
+        if (!availableSeats.isEmpty()) {
+            subtitle.append(" · Ghế: ").append(String.join(", ", availableSeats));
+        } else if (t.soGheTrong() > 0) {
             subtitle.append(" · Còn ").append(t.soGheTrong()).append(" ghế");
         }
         return new AssistantTripCardDto(
@@ -290,8 +294,24 @@ public class AssistantChatService {
             t.loaiXe(),
             t.bienSo(),
             t.soGheTrong(),
-            subtitle.toString()
+            subtitle.toString(),
+            availableSeats
         );
+    }
+
+    private List<String> listAvailableSeats(Integer tripId, int limit) {
+        if (tripId == null || limit <= 0) {
+            return List.of();
+        }
+        try {
+            return bookingCatalogService.getSeatMap(tripId).ghe().stream()
+                .filter(seat -> !seat.daBan() && !seat.dangGiuCho())
+                .map(seat -> seat.maGhe())
+                .limit(limit)
+                .toList();
+        } catch (Exception ex) {
+            return List.of();
+        }
     }
 
     private AssistantActionDto searchAction(String diemDi, String diemDen, String ngayDi) {

@@ -1,19 +1,21 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { Users, LogOut, Menu, Bell, Bus, MapPin, BusFront, Ticket, Truck, UserCircle2, Ban, BarChart3 } from 'lucide-react';
 import { clearAuth, getStoredEmail, getStoredRole } from '../../auth/storage';
+import { api } from '../../api/client';
 
 const AdminLayout: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [pendingCancelCount, setPendingCancelCount] = useState(0);
   const adminEmail = getStoredEmail() || 'quản trị';
   const role = getStoredRole();
   const isManager = role === 'QUAN_TRI';
   const isStaff = role === 'NHAN_VIEN';
 
   const navItems = useMemo(() => {
-    const items: { name: string; path: string; icon: React.ReactNode; managerOnly?: boolean }[] = [
+    const items: { name: string; path: string; icon: React.ReactNode; managerOnly?: boolean; badge?: number }[] = [
       { name: 'Quản lý tài khoản', path: '/admin/accounts', icon: <Users size={20} />, managerOnly: true },
       { name: 'Quản lý khách hàng', path: '/admin/customers', icon: <UserCircle2 size={20} /> },
       { name: 'Yêu cầu hủy vé', path: '/admin/cancel-requests', icon: <Ban size={20} /> },
@@ -32,6 +34,24 @@ const AdminLayout: React.FC = () => {
     return items;
   }, [isManager, isStaff]);
 
+  useEffect(() => {
+    let active = true;
+    const loadPending = async () => {
+      try {
+        const res = await api.get<{ data?: number }>('/api/staff/booking/cancel-requests/pending-count');
+        if (active) setPendingCancelCount(Number(res.data?.data) || 0);
+      } catch {
+        if (active) setPendingCancelCount(0);
+      }
+    };
+    void loadPending();
+    const timer = window.setInterval(() => void loadPending(), 60000);
+    return () => {
+      active = false;
+      window.clearInterval(timer);
+    };
+  }, [location.pathname]);
+
   const isActivePath = (path: string) => {
     return location.pathname === path || location.pathname.startsWith(`${path}/`);
   };
@@ -39,6 +59,10 @@ const AdminLayout: React.FC = () => {
   const onLogout = () => {
     clearAuth();
     navigate('/', { replace: true });
+  };
+
+  const onBellClick = () => {
+    navigate('/admin/cancel-requests');
   };
 
   return (
@@ -59,9 +83,19 @@ const AdminLayout: React.FC = () => {
         </div>
 
         <div className='flex items-center gap-4'>
-          <button className='p-2 hover:bg-white/20 rounded-full transition-colors relative'>
+          <button
+            type='button'
+            onClick={onBellClick}
+            className='p-2 hover:bg-white/20 rounded-full transition-colors relative'
+            aria-label={pendingCancelCount > 0 ? `${pendingCancelCount} yêu cầu hủy vé chờ duyệt` : 'Yêu cầu hủy vé'}
+            title={pendingCancelCount > 0 ? `${pendingCancelCount} yêu cầu hủy vé chờ duyệt` : 'Yêu cầu hủy vé'}
+          >
             <Bell size={20} />
-            <span className='absolute top-1 right-1 w-2.5 h-2.5 bg-yellow-400 border-2 border-orange-500 rounded-full' />
+            {pendingCancelCount > 0 && (
+              <span className='absolute -top-0.5 -right-0.5 min-w-[18px] rounded-full bg-red-500 px-1 py-0.5 text-[10px] font-bold leading-none text-white ring-2 ring-orange-500'>
+                {pendingCancelCount > 99 ? '99+' : pendingCancelCount}
+              </span>
+            )}
           </button>
           <div className='flex items-center gap-3 px-3 py-1.5 rounded-lg border border-white/20'>
             <div className='w-8 h-8 bg-white text-[#ef5222] font-bold rounded-full flex items-center justify-center shadow-inner text-sm'>
@@ -82,6 +116,7 @@ const AdminLayout: React.FC = () => {
           <nav className='flex-1 overflow-y-auto py-6 px-3 space-y-2'>
             {navItems.map((item) => {
               const isActive = isActivePath(item.path);
+              const showBadge = item.path === '/admin/cancel-requests' && pendingCancelCount > 0;
               return (
                 <Link
                   key={item.path}
@@ -93,8 +128,22 @@ const AdminLayout: React.FC = () => {
                   }`}
                   title={sidebarOpen ? '' : item.name}
                 >
-                  <span className={`flex-shrink-0 ${isActive ? 'text-[#ef5222]' : 'text-gray-400'}`}>{item.icon}</span>
-                  {sidebarOpen && <span className='ml-3'>{item.name}</span>}
+                  <span className={`relative flex-shrink-0 ${isActive ? 'text-[#ef5222]' : 'text-gray-400'}`}>
+                    {item.icon}
+                    {showBadge && !sidebarOpen && (
+                      <span className='absolute -top-1 -right-1 h-2.5 w-2.5 rounded-full bg-red-500 ring-2 ring-white' />
+                    )}
+                  </span>
+                  {sidebarOpen && (
+                    <span className='ml-3 flex flex-1 items-center justify-between gap-2'>
+                      <span>{item.name}</span>
+                      {showBadge && (
+                        <span className='rounded-full bg-red-500 px-2 py-0.5 text-[10px] font-bold text-white'>
+                          {pendingCancelCount > 99 ? '99+' : pendingCancelCount}
+                        </span>
+                      )}
+                    </span>
+                  )}
                 </Link>
               );
             })}

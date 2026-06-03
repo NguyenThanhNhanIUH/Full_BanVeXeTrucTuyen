@@ -24,6 +24,7 @@ type AssistantTripCard = {
   bienSo?: string;
   soGheTrong?: number;
   subtitle?: string;
+  availableSeats?: string[];
 };
 
 type AssistantAction = {
@@ -212,6 +213,11 @@ const HelpBubble = () => {
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-semibold text-gray-800">{trip.tenTuyen}</p>
                   <p className="mt-0.5 text-xs text-gray-500">{trip.subtitle || formatCurrency(Number(trip.giaVe))}</p>
+                  {trip.availableSeats && trip.availableSeats.length > 0 && (
+                    <p className="mt-1 text-[11px] font-medium text-[#00613d]">
+                      Ghế trống: {trip.availableSeats.join(', ')}
+                    </p>
+                  )}
                 </div>
                 <span className="flex shrink-0 items-center gap-1 text-xs font-semibold text-[#ef5222]">
                   Đặt vé <ArrowRight className="h-3.5 w-3.5" />
