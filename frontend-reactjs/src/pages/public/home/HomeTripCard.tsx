@@ -8,9 +8,10 @@ import {
 } from '../../../utils/seatMapLayout';
 import { addMinutesToTime, formatCurrency, formatDuration } from './homeFormatters';
 import { TripPolicyPanel, TripSchedulePanel, TripTransferPanel } from './homeTripCardTabPanels';
+import TripTrackingMap from '../../../components/maps/TripTrackingMap';
 import type { ResultTab, TripSummary } from './homeTypes';
 
-type DetailTab = 'seats' | 'schedule' | 'transfer' | 'policy';
+type DetailTab = 'seats' | 'schedule' | 'tracking' | 'transfer' | 'policy';
 
 type HomeTripCardProps = {
   trip: TripSummary;
@@ -137,6 +138,9 @@ const HomeTripCard = ({
           <button type="button" onClick={() => onDetailTabClick('schedule')} className={`${tabBtnClass(activeTab === 'schedule')} ml-4`}>
             Lịch trình
           </button>
+          <button type="button" onClick={() => onDetailTabClick('tracking')} className={`${tabBtnClass(activeTab === 'tracking')} ml-4`}>
+            Theo dõi xe
+          </button>
           <button type="button" onClick={() => onDetailTabClick('transfer')} className={`${tabBtnClass(activeTab === 'transfer')} ml-4`}>
             Trung chuyển
           </button>
@@ -160,6 +164,14 @@ const HomeTripCard = ({
       {tripDangChonGhe === trip.id && (
         <div className="mt-4 border-t border-gray-100 pt-4">
           {activeTab === 'schedule' && <TripSchedulePanel trip={trip} gioDenHienThi={gioDenHienThi} />}
+          {activeTab === 'tracking' && (
+            <div className="rounded-xl bg-gray-50/80 px-4 py-4">
+              <p className="text-sm font-bold text-gray-900">Theo dõi xe trên bản đồ</p>
+              <div className="mt-3">
+                <TripTrackingMap tripId={trip.id} active={tripDangChonGhe === trip.id && activeTab === 'tracking'} />
+              </div>
+            </div>
+          )}
           {activeTab === 'transfer' && <TripTransferPanel />}
           {activeTab === 'policy' && <TripPolicyPanel />}
 

@@ -5,6 +5,7 @@ import com.banvexe.accountmanagement.dto.booking.SeatMapDto;
 import com.banvexe.accountmanagement.dto.booking.SeatStatusDto;
 import com.banvexe.accountmanagement.dto.booking.TripDetailDto;
 import com.banvexe.accountmanagement.dto.booking.TripSummaryDto;
+import com.banvexe.accountmanagement.dto.booking.TripTrackingDto;
 import com.banvexe.accountmanagement.entity.ChuyenXe;
 import com.banvexe.accountmanagement.entity.RouteStatus;
 import com.banvexe.accountmanagement.entity.TicketStatus;
@@ -44,17 +45,20 @@ public class BookingCatalogService {
     private final ChuyenXeRepository chuyenXeRepository;
     private final ChiTietVeRepository chiTietVeRepository;
     private final GiuGheTamRepository giuGheTamRepository;
+    private final LocationCoordinateResolver locationCoordinateResolver;
 
     public BookingCatalogService(
         TuyenXeRepository tuyenXeRepository,
         ChuyenXeRepository chuyenXeRepository,
         ChiTietVeRepository chiTietVeRepository,
-        GiuGheTamRepository giuGheTamRepository
+        GiuGheTamRepository giuGheTamRepository,
+        LocationCoordinateResolver locationCoordinateResolver
     ) {
         this.tuyenXeRepository = tuyenXeRepository;
         this.chuyenXeRepository = chuyenXeRepository;
         this.chiTietVeRepository = chiTietVeRepository;
         this.giuGheTamRepository = giuGheTamRepository;
+        this.locationCoordinateResolver = locationCoordinateResolver;
     }
 
     public List<RouteSummaryDto> searchRoutes(String diemDi, String diemDen) {
@@ -110,6 +114,69 @@ public class BookingCatalogService {
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Không tìm thấy chuyến xe"));
         int trong = countAvailableSeats(c);
         return toTripDetail(c, trong);
+    }
+
+    public TripTrackingDto getTripTracking(Integer chuyenId) {
+        ChuyenXe c = chuyenXeRepository.findByIdWithDetails(chuyenId)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Không tìm thấy chuyến xe"));
+        TuyenXe t = c.getTuyenXe();
+        Xe x = c.getXe();
+        String diemDi = t != null ? t.getDiemDi() : "";
+        String diemDen = t != null ? t.getDiemDen() : "";
+        LocationCoordinateResolver.GeoPoint origin = locationCoordinateResolver.resolve(diemDi);
+        LocationCoordinateResolver.GeoPoint dest = locationCoordinateResolver.resolve(diemDen);
+
+        Integer durationMinutes = t != null ? t.getThoiGianDuKien() : null;
+        LocalDateTime departure = LocalDateTime.of(c.getNgayDi(), c.getGioDi());
+        LocalDateTime arrival = durationMinutes != null && durationMinutes > 0
+            ? departure.plusMinutes(durationMinutes)
+            : departure.plusHours(6);
+        LocalDateTime now = LocalDateTime.now();
+
+        TripRunStatus runStatus = c.getTrangThai() != null ? c.getTrangThai() : TripRunStatus.CHUA_KHOI_HANH;
+        double progress;
+        String statusCode;
+        String statusLabel;
+
+        if (runStatus == TripRunStatus.HUY_CHUYEN) {
+            progress = 0;
+            statusCode = runStatus.name();
+            statusLabel = "Chuyến đã hủy";
+        } else if (runStatus == TripRunStatus.HOAN_THANH || now.isAfter(arrival)) {
+            progress = 1;
+            statusCode = TripRunStatus.HOAN_THANH.name();
+            statusLabel = "Đã đến nơi";
+        } else if (runStatus == TripRunStatus.DANG_CHAY || (now.isAfter(departure) && now.isBefore(arrival))) {
+            long totalSeconds = Math.max(1, java.time.Duration.between(departure, arrival).getSeconds());
+            long elapsedSeconds = Math.max(0, java.time.Duration.between(departure, now).getSeconds());
+            progress = Math.min(1, Math.max(0, (double) elapsedSeconds / totalSeconds));
+            statusCode = TripRunStatus.DANG_CHAY.name();
+            statusLabel = "Đang trên đường";
+        } else {
+            progress = 0;
+            statusCode = TripRunStatus.CHUA_KHOI_HANH.name();
+            statusLabel = "Chưa khởi hành";
+        }
+
+        double xeLat = origin.lat() + (dest.lat() - origin.lat()) * progress;
+        double xeLng = origin.lng() + (dest.lng() - origin.lng()) * progress;
+
+        return new TripTrackingDto(
+            c.getId(),
+            diemDi,
+            diemDen,
+            x != null ? x.getLoaiXe() : "",
+            x != null ? x.getBienSo() : "",
+            origin.lat(),
+            origin.lng(),
+            dest.lat(),
+            dest.lng(),
+            xeLat,
+            xeLng,
+            (int) Math.round(progress * 100),
+            statusCode,
+            statusLabel
+        );
     }
 
     public SeatMapDto getSeatMap(Integer chuyenId) {

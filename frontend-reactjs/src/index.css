@@ -45,3 +45,10 @@ body {
   border-color: #ef5222;
   box-shadow: 0 0 0 1px #ef5222;
 }
+
+.trip-map-origin,
+.trip-map-dest,
+.trip-map-bus {
+  background: transparent;
+  border: none;
+}

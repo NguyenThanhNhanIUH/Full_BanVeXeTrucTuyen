@@ -7,6 +7,7 @@ import com.banvexe.accountmanagement.dto.booking.SeatHoldRequest;
 import com.banvexe.accountmanagement.dto.booking.SeatMapDto;
 import com.banvexe.accountmanagement.dto.booking.TripDetailDto;
 import com.banvexe.accountmanagement.dto.booking.TripSummaryDto;
+import com.banvexe.accountmanagement.dto.booking.TripTrackingDto;
 import com.banvexe.accountmanagement.service.booking.BookingCatalogService;
 import com.banvexe.accountmanagement.service.booking.SeatMapStreamService;
 import com.banvexe.accountmanagement.service.booking.SeatSelectionHoldService;
@@ -79,6 +80,11 @@ public class BookingCatalogController {
     @GetMapping("/trips/{id}")
     public ResponseEntity<ApiResponse<TripDetailDto>> tripDetail(@PathVariable Integer id) {
         return ResponseEntity.ok(ApiResponse.success(bookingCatalogService.getTripDetail(id)));
+    }
+
+    @GetMapping("/trips/{id}/tracking")
+    public ResponseEntity<ApiResponse<TripTrackingDto>> tripTracking(@PathVariable Integer id) {
+        return ResponseEntity.ok(ApiResponse.success(bookingCatalogService.getTripTracking(id)));
     }
 
     @GetMapping("/trips/{id}/seats")
