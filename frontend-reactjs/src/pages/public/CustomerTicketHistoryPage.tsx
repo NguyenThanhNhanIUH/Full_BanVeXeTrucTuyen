@@ -1,9 +1,9 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { api } from '../../api/client';
 import { getStoredEmail, getStoredName, getStoredPhone, getStoredRole, getToken } from '../../auth/storage';
 import CustomerAccountShell from '../../components/account/CustomerAccountShell';
-import { REALTIME_POLL_MS } from '../../constants/realtimePoll';
+import { REALTIME_FAST_POLL_MS, REALTIME_POLL_MS } from '../../constants/realtimePoll';
 import { usePollingRefresh } from '../../hooks/usePollingRefresh';
 
 type ApiResponse<T> = {
@@ -36,9 +36,15 @@ type TicketItem = {
 const isPendingPayment = (status: string) => status === 'CHO_THANH_TOAN' || status === 'DAT_TRUOC';
 
 const formatStatusLabel = (status: string) => {
-  if (status === 'DAT_TRUOC') return 'Đặt trước';
-  if (status === 'CHO_THANH_TOAN') return 'Chờ TT';
-  return status;
+  const labels: Record<string, string> = {
+    DAT_TRUOC: 'Đặt trước',
+    CHO_THANH_TOAN: 'Chờ TT',
+    DANG_XU_LY: 'Chờ duyệt hủy',
+    DA_HUY: 'Đã hủy',
+    DA_THANH_TOAN: 'Đã thanh toán',
+    HOAN_THANH: 'Hoàn thành',
+  };
+  return labels[status] ?? status;
 };
 
 /** Từ chối hủy: bản cũ có ngoặc, bản mới một dòng "Từ chối hủy: lý do — thời gian". */
@@ -107,6 +113,7 @@ const CustomerTicketHistoryPage = () => {
   const [ticketInlineMsg, setTicketInlineMsg] = useState<
     Record<number, { text: string; kind: 'success' | 'error' | 'warn' }>
   >({});
+  const prevTicketsRef = useRef<TicketItem[]>([]);
 
   const retryPayment = (ticket: TicketItem) => {
     if (!isPendingPayment(ticket.trangThai) || !ticket.chuyen?.id) return;
@@ -231,13 +238,29 @@ const CustomerTicketHistoryPage = () => {
     try {
       const res = await api.get<ApiResponse<TicketItem[]>>('/api/me/booking/tickets');
       const list = res.data?.data ?? [];
-      setTickets(
-        list.slice().sort((a, b) => {
-          const ta = a.ngayDat ? new Date(a.ngayDat).getTime() : 0;
-          const tb = b.ngayDat ? new Date(b.ngayDat).getTime() : 0;
-          return tb - ta;
-        }),
-      );
+      const sorted = list.slice().sort((a, b) => {
+        const ta = a.ngayDat ? new Date(a.ngayDat).getTime() : 0;
+        const tb = b.ngayDat ? new Date(b.ngayDat).getTime() : 0;
+        return tb - ta;
+      });
+      const prev = prevTicketsRef.current;
+      const updates: Record<number, { text: string; kind: 'success' | 'error' | 'warn' }> = {};
+      for (const t of sorted) {
+        const old = prev.find((p) => p.id === t.id);
+        if (!old || old.trangThai === t.trangThai) continue;
+        if (old.trangThai === 'DANG_XU_LY' && t.trangThai === 'DA_HUY') {
+          updates[t.id] = { kind: 'success', text: 'Yêu cầu hủy đã được duyệt. Vé đã hủy.' };
+        } else if (old.trangThai === 'DANG_XU_LY' && t.trangThai === 'DAT_TRUOC') {
+          updates[t.id] = { kind: 'warn', text: 'Yêu cầu hủy bị từ chối. Vé vẫn ở trạng thái đặt trước.' };
+        } else if (old.trangThai === 'DANG_XU_LY' && t.trangThai === 'DA_THANH_TOAN') {
+          updates[t.id] = { kind: 'warn', text: 'Yêu cầu hủy bị từ chối. Vé vẫn còn hiệu lực.' };
+        }
+      }
+      if (Object.keys(updates).length > 0) {
+        setTicketInlineMsg((current) => ({ ...current, ...updates }));
+      }
+      prevTicketsRef.current = sorted;
+      setTickets(sorted);
     } catch (e) {
       const err = e as { response?: { data?: { message?: string } } };
       if (!silent) {
@@ -254,7 +277,12 @@ const CustomerTicketHistoryPage = () => {
     void loadTickets();
   }, [loadTickets]);
 
-  usePollingRefresh(loadTickets, REALTIME_POLL_MS);
+  const hasPendingCancel = useMemo(
+    () => tickets.some((t) => t.trangThai === 'DANG_XU_LY'),
+    [tickets],
+  );
+
+  usePollingRefresh(loadTickets, hasPendingCancel ? REALTIME_FAST_POLL_MS : REALTIME_POLL_MS);
 
   if (!token || role !== 'KHACH_HANG') {
     return <Navigate to="/login" replace />;

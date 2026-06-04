@@ -6,7 +6,7 @@ import { clearAuth, getStoredEmail, getStoredName, getStoredRole } from '../../a
 import type { PublicBranding } from '../../types/publicBranding';
 import logoImage from '../../assets/logo.png';
 import HelpBubble from '../common/HelpBubble';
-import { REALTIME_POLL_MS } from '../../constants/realtimePoll';
+import { REALTIME_FAST_POLL_MS } from '../../constants/realtimePoll';
 
 const defaultBranding: PublicBranding = { logoUrl: null, bannerUrl: null };
 
@@ -79,7 +79,7 @@ const PublicLayout = () => {
       if (document.visibilityState === 'visible') void loadNotifications();
     };
     document.addEventListener('visibilitychange', onVis);
-    const timer = window.setInterval(() => void loadNotifications(), REALTIME_POLL_MS);
+    const timer = window.setInterval(() => void loadNotifications(), REALTIME_FAST_POLL_MS);
     return () => {
       document.removeEventListener('visibilitychange', onVis);
       window.clearInterval(timer);
@@ -226,7 +226,12 @@ const PublicLayout = () => {
                                       onClick={() => {
                                         void api.post(`/api/me/notifications/${n.id}/read`).then(() => {
                                           void loadNotifications();
-                                          if (n.loai === 'DAT_TRUOC' || n.loai === 'NHAC_THANH_TOAN') {
+                                          if (
+                                            n.loai === 'DAT_TRUOC' ||
+                                            n.loai === 'NHAC_THANH_TOAN' ||
+                                            n.loai === 'HUY_VE' ||
+                                            n.loai === 'TU_CHOI_HUY'
+                                          ) {
                                             navigate('/tai-khoan/lich-su-mua-ve');
                                           }
                                         });

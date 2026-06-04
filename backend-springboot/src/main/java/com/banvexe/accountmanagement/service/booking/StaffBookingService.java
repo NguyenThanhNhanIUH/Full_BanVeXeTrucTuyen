@@ -13,6 +13,7 @@ import com.banvexe.accountmanagement.repository.ChiTietVeRepository;
 import com.banvexe.accountmanagement.repository.ChuyenXeRepository;
 import com.banvexe.accountmanagement.repository.KhachHangRepository;
 import com.banvexe.accountmanagement.repository.VeXeRepository;
+import com.banvexe.accountmanagement.util.AfterCommit;
 import com.banvexe.accountmanagement.util.TicketGhiChuUtil;
 import java.util.HashSet;
 import java.util.List;
@@ -32,19 +33,22 @@ public class StaffBookingService {
     private final KhachHangRepository khachHangRepository;
     private final ChuyenXeRepository chuyenXeRepository;
     private final BookingCatalogService bookingCatalogService;
+    private final CustomerNotificationService customerNotificationService;
 
     public StaffBookingService(
         VeXeRepository veXeRepository,
         ChiTietVeRepository chiTietVeRepository,
         KhachHangRepository khachHangRepository,
         ChuyenXeRepository chuyenXeRepository,
-        BookingCatalogService bookingCatalogService
+        BookingCatalogService bookingCatalogService,
+        CustomerNotificationService customerNotificationService
     ) {
         this.veXeRepository = veXeRepository;
         this.chiTietVeRepository = chiTietVeRepository;
         this.khachHangRepository = khachHangRepository;
         this.chuyenXeRepository = chuyenXeRepository;
         this.bookingCatalogService = bookingCatalogService;
+        this.customerNotificationService = customerNotificationService;
     }
 
     @Transactional(readOnly = true)
@@ -167,6 +171,7 @@ public class StaffBookingService {
                 "Không cập nhật được ghi chú / trạng thái vé. Thử lại."
             );
         }
+        notifyCancelDecisionAfterCommit(ve.getKhachHangId(), ticketId, true, null);
     }
 
     @Transactional
@@ -181,13 +186,40 @@ public class StaffBookingService {
         }
         String reason = (lyDo == null || lyDo.isBlank()) ? "Không nêu lý do" : lyDo.trim();
         String line = TicketGhiChuUtil.ghiChuTuChoiHuy(reason);
-        int n = veXeRepository.updateGhiChuAndTrangThaiById(ticketId, line, TicketStatus.DA_THANH_TOAN);
+        TicketStatus restoreStatus = ve.getHanThanhToan() != null
+            ? TicketStatus.DAT_TRUOC
+            : TicketStatus.DA_THANH_TOAN;
+        int n = veXeRepository.updateGhiChuAndTrangThaiById(ticketId, line, restoreStatus);
         if (n != 1) {
             throw new ResponseStatusException(
                 HttpStatus.INTERNAL_SERVER_ERROR,
                 "Không cập nhật được từ chối hủy. Thử lại."
             );
         }
+        notifyCancelDecisionAfterCommit(ve.getKhachHangId(), ticketId, false, reason);
+    }
+
+    private void notifyCancelDecisionAfterCommit(
+        Integer khachHangId,
+        Integer ticketId,
+        boolean approved,
+        String rejectReason
+    ) {
+        if (khachHangId == null || ticketId == null) {
+            return;
+        }
+        AfterCommit.run(() -> {
+            KhachHang kh = khachHangRepository.findById(khachHangId).orElse(null);
+            VeXe updated = veXeRepository.findByIdWithDetails(ticketId).orElse(null);
+            if (kh == null || updated == null) {
+                return;
+            }
+            if (approved) {
+                customerNotificationService.notifyCancelApproved(kh, updated);
+            } else {
+                customerNotificationService.notifyCancelRejected(kh, updated, rejectReason);
+            }
+        });
     }
 
     @Transactional

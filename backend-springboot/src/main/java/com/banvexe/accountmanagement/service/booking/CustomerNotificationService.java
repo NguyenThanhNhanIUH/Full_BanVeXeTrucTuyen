@@ -81,6 +81,33 @@ public class CustomerNotificationService {
         );
     }
 
+    public void notifyCancelApproved(KhachHang kh, VeXe ve) {
+        if (kh == null || ve == null) {
+            return;
+        }
+        notifyKhachHang(
+            kh.getId(),
+            "Yêu cầu hủy đã duyệt",
+            "Vé " + ve.getMaVe() + " đã được hủy theo yêu cầu của bạn.",
+            "HUY_VE",
+            ve.getId()
+        );
+    }
+
+    public void notifyCancelRejected(KhachHang kh, VeXe ve, String lyDo) {
+        if (kh == null || ve == null) {
+            return;
+        }
+        String reason = lyDo == null || lyDo.isBlank() ? "Không nêu lý do" : lyDo.trim();
+        notifyKhachHang(
+            kh.getId(),
+            "Từ chối yêu cầu hủy vé",
+            "Vé " + ve.getMaVe() + " không được hủy. Lý do: " + reason + ". Vé vẫn còn hiệu lực.",
+            "TU_CHOI_HUY",
+            ve.getId()
+        );
+    }
+
     public List<CustomerNotificationDto> listForEmail(String email) {
         KhachHang kh = resolveKhach(email);
         return thongBaoRepository.findTop50ByKhachHangIdOrderByCreatedAtDesc(kh.getId()).stream()
