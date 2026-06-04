@@ -17,6 +17,8 @@ import {
   parseGheList,
   pickGhiChuFromRow,
 } from './ticketManagementUtils';
+import { REALTIME_POLL_MS } from '../../constants/realtimePoll';
+import { usePollingRefresh } from '../../hooks/usePollingRefresh';
 
 const TicketManagement: React.FC = () => {
   const [page, setPage] = useState(0);
@@ -53,8 +55,11 @@ const TicketManagement: React.FC = () => {
   const [ticketSearch, setTicketSearch] = useState('');
   const isStaff = getStoredRole() === 'NHAN_VIEN';
 
-  const loadStats = useCallback(async () => {
-    setStatsLoading(true);
+  const loadStats = useCallback(async (options?: { silent?: boolean }) => {
+    const silent = Boolean(options?.silent);
+    if (!silent) {
+      setStatsLoading(true);
+    }
     setStatsErr(null);
     try {
       const { data: body } = await api.get('/api/manager/tickets/stats');
@@ -71,14 +76,21 @@ const TicketManagement: React.FC = () => {
       }
     } catch (e) {
       console.error(e);
-      setStatsErr(apiErrMessage(e));
+      if (!silent) {
+        setStatsErr(apiErrMessage(e));
+      }
     } finally {
-      setStatsLoading(false);
+      if (!silent) {
+        setStatsLoading(false);
+      }
     }
   }, []);
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  const load = useCallback(async (options?: { silent?: boolean }) => {
+    const silent = Boolean(options?.silent);
+    if (!silent) {
+      setLoading(true);
+    }
     setLoadErr(null);
     try {
       const params: Record<string, string | number> = { page, size: ADMIN_PAGE_SIZE };
@@ -93,9 +105,13 @@ const TicketManagement: React.FC = () => {
     } catch (e) {
       console.error(e);
       setData({ content: [], page: 0, size: ADMIN_PAGE_SIZE, totalElements: 0, totalPages: 0 });
-      setLoadErr(apiErrMessage(e));
+      if (!silent) {
+        setLoadErr(apiErrMessage(e));
+      }
     } finally {
-      setLoading(false);
+      if (!silent) {
+        setLoading(false);
+      }
     }
   }, [page, status]);
 
@@ -112,24 +128,13 @@ const TicketManagement: React.FC = () => {
     void loadStats();
   }, [loadStats]);
 
-  useEffect(() => {
-    const onVis = () => {
-      if (document.visibilityState === 'visible') {
-        void load();
-        void loadStats();
-      }
-    };
-    document.addEventListener('visibilitychange', onVis);
-    return () => document.removeEventListener('visibilitychange', onVis);
-  }, [load, loadStats]);
-
-  useEffect(() => {
-    const timer = window.setInterval(() => {
-      void load();
-      void loadStats();
-    }, 20000);
-    return () => window.clearInterval(timer);
-  }, [load, loadStats]);
+  usePollingRefresh(
+    (options) => {
+      void load(options);
+      void loadStats(options);
+    },
+    REALTIME_POLL_MS,
+  );
 
   const openEditModal = async (row: TicketRow) => {
     const id = row.id;

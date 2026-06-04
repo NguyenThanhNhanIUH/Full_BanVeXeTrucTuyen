@@ -3,6 +3,7 @@ import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { Users, LogOut, Menu, Bell, Bus, MapPin, BusFront, Ticket, Truck, UserCircle2, Ban, BarChart3 } from 'lucide-react';
 import { clearAuth, getStoredEmail, getStoredRole } from '../../auth/storage';
 import { api } from '../../api/client';
+import { REALTIME_POLL_MS } from '../../constants/realtimePoll';
 
 const AdminLayout: React.FC = () => {
   const location = useLocation();
@@ -45,7 +46,7 @@ const AdminLayout: React.FC = () => {
       }
     };
     void loadPending();
-    const timer = window.setInterval(() => void loadPending(), 20000);
+    const timer = window.setInterval(() => void loadPending(), REALTIME_POLL_MS);
     return () => {
       active = false;
       window.clearInterval(timer);

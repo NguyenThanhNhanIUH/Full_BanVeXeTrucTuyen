@@ -1,8 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { api } from '../../api/client';
 import { getStoredEmail, getStoredName, getStoredPhone, getStoredRole, getToken } from '../../auth/storage';
 import CustomerAccountShell from '../../components/account/CustomerAccountShell';
+import { REALTIME_POLL_MS } from '../../constants/realtimePoll';
+import { usePollingRefresh } from '../../hooks/usePollingRefresh';
 
 type ApiResponse<T> = {
   code: number;
@@ -220,29 +222,39 @@ const CustomerTicketHistoryPage = () => {
     return () => window.clearInterval(intervalId);
   }, []);
 
-  useEffect(() => {
-    const loadTickets = async () => {
+  const loadTickets = useCallback(async (options?: { silent?: boolean }) => {
+    const silent = Boolean(options?.silent);
+    if (!silent) {
       setLoading(true);
-      setError('');
-      try {
-        const res = await api.get<ApiResponse<TicketItem[]>>('/api/me/booking/tickets');
-        const list = res.data?.data ?? [];
-        setTickets(
-          list.slice().sort((a, b) => {
-            const ta = a.ngayDat ? new Date(a.ngayDat).getTime() : 0;
-            const tb = b.ngayDat ? new Date(b.ngayDat).getTime() : 0;
-            return tb - ta;
-          }),
-        );
-      } catch (e) {
-        const err = e as { response?: { data?: { message?: string } } };
+    }
+    setError('');
+    try {
+      const res = await api.get<ApiResponse<TicketItem[]>>('/api/me/booking/tickets');
+      const list = res.data?.data ?? [];
+      setTickets(
+        list.slice().sort((a, b) => {
+          const ta = a.ngayDat ? new Date(a.ngayDat).getTime() : 0;
+          const tb = b.ngayDat ? new Date(b.ngayDat).getTime() : 0;
+          return tb - ta;
+        }),
+      );
+    } catch (e) {
+      const err = e as { response?: { data?: { message?: string } } };
+      if (!silent) {
         setError(err.response?.data?.message || 'Không thể tải lịch sử mua vé.');
-      } finally {
+      }
+    } finally {
+      if (!silent) {
         setLoading(false);
       }
-    };
-    void loadTickets();
+    }
   }, []);
+
+  useEffect(() => {
+    void loadTickets();
+  }, [loadTickets]);
+
+  usePollingRefresh(loadTickets, REALTIME_POLL_MS);
 
   if (!token || role !== 'KHACH_HANG') {
     return <Navigate to="/login" replace />;

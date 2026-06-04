@@ -1,6 +1,8 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Ban, CheckCircle2, Loader2, RefreshCw } from 'lucide-react';
 import { api } from '../../api/client';
+import { REALTIME_POLL_MS } from '../../constants/realtimePoll';
+import { usePollingRefresh } from '../../hooks/usePollingRefresh';
 
 type TripSummary = {
   tenTuyen?: string;
@@ -35,8 +37,11 @@ const CancelRequestsPage: React.FC = () => {
   const [rejectId, setRejectId] = useState<number | null>(null);
   const [lyDo, setLyDo] = useState('');
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  const load = useCallback(async (options?: { silent?: boolean }) => {
+    const silent = Boolean(options?.silent);
+    if (!silent) {
+      setLoading(true);
+    }
     setErr('');
     try {
       const { data: countWrap } = await api.get<{ data?: number }>(
@@ -51,10 +56,14 @@ const CancelRequestsPage: React.FC = () => {
       setList(body?.data ?? []);
     } catch (e) {
       const m = (e as { response?: { data?: { message?: string } } })?.response?.data?.message;
-      setErr(m || 'Không tải được danh sách yêu cầu hủy.');
+      if (!silent) {
+        setErr(m || 'Không tải được danh sách yêu cầu hủy.');
+      }
       setList([]);
     } finally {
-      setLoading(false);
+      if (!silent) {
+        setLoading(false);
+      }
     }
   }, []);
 
@@ -62,18 +71,7 @@ const CancelRequestsPage: React.FC = () => {
     void load();
   }, [load]);
 
-  useEffect(() => {
-    const onVis = () => {
-      if (document.visibilityState === 'visible') void load();
-    };
-    document.addEventListener('visibilitychange', onVis);
-    return () => document.removeEventListener('visibilitychange', onVis);
-  }, [load]);
-
-  useEffect(() => {
-    const timer = window.setInterval(() => void load(), 20000);
-    return () => window.clearInterval(timer);
-  }, [load]);
+  usePollingRefresh(load, REALTIME_POLL_MS);
 
   const approve = async (id: number) => {
     if (!window.confirm('Duyệt hủy vé này? Vé sẽ chuyển sang trạng thái Đã hủy.')) return;

@@ -6,6 +6,7 @@ import { clearAuth, getStoredEmail, getStoredName, getStoredRole } from '../../a
 import type { PublicBranding } from '../../types/publicBranding';
 import logoImage from '../../assets/logo.png';
 import HelpBubble from '../common/HelpBubble';
+import { REALTIME_POLL_MS } from '../../constants/realtimePoll';
 
 const defaultBranding: PublicBranding = { logoUrl: null, bannerUrl: null };
 
@@ -74,8 +75,15 @@ const PublicLayout = () => {
   useEffect(() => {
     if (!isCustomer) return;
     void loadNotifications();
-    const timer = window.setInterval(() => void loadNotifications(), 60000);
-    return () => window.clearInterval(timer);
+    const onVis = () => {
+      if (document.visibilityState === 'visible') void loadNotifications();
+    };
+    document.addEventListener('visibilitychange', onVis);
+    const timer = window.setInterval(() => void loadNotifications(), REALTIME_POLL_MS);
+    return () => {
+      document.removeEventListener('visibilitychange', onVis);
+      window.clearInterval(timer);
+    };
   }, [isCustomer, location.pathname]);
 
   useEffect(() => {
